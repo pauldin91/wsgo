@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -17,19 +18,31 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	host := flag.String("host", "wss://localhost:6443/ws", "Server host")
 
 	flag.Parse()
 
-	client := core.NewWsClient(*host)
+	client := core.NewWsClient(ctx, *host)
+
 	go func() {
-		client.Wait(sigChan)
+		sig := <-sigChan
+		fmt.Printf("\nReceived signal: %s. Exiting...\n", sig)
+		cancel()
 	}()
-	readFromConsole(sigChan, client)
+
+	go client.Close()
+
+	readFromConsole(ctx, client)
 
 }
 
-func readFromConsole(sigChan chan os.Signal, client *core.WsClient) {
+func readFromConsole(ctx context.Context, client *core.WsClient) {
+	// Signal handling setup
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Input reader setup
 	reader := bufio.NewReader(os.Stdin)
@@ -38,12 +51,11 @@ func readFromConsole(sigChan chan os.Signal, client *core.WsClient) {
 
 	for {
 		select {
-		case sig := <-sigChan:
-			fmt.Printf("\nReceived signal: %s. Exiting...\n", sig)
+		case <-ctx.Done():
+			fmt.Println("Exiting...")
 			return
 
 		default:
-			fmt.Print("> ")
 			input, err := reader.ReadString('\n')
 			if err != nil {
 				fmt.Println("Read error:", err)
@@ -56,7 +68,6 @@ func readFromConsole(sigChan chan os.Signal, client *core.WsClient) {
 				return
 			}
 
-			fmt.Printf("You send: %s\n", text)
 			client.Send(text)
 		}
 	}

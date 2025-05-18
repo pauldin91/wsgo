@@ -1,45 +1,54 @@
 package core
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
-	"os"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 type WsClient struct {
 	address string
-	done    chan bool
-	err     chan error
 	send    chan []byte
 	conn    *websocket.Conn
+	ctx     context.Context
+	wg      *sync.WaitGroup
 }
 
-func NewWsClient(address string) *WsClient {
+func NewWsClient(ctx context.Context, address string) *WsClient {
 	var ws = &WsClient{
 		address: address,
-		done:    make(chan bool),
-		err:     make(chan error),
 		send:    make(chan []byte),
+		ctx:     ctx,
+		wg:      &sync.WaitGroup{},
 	}
-
-	go ws.connect()
+	ws.connect()
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		ws.write()
+		ws.read()
+	}()
 	return ws
 }
 
-func (ws *WsClient) Wait(sigChan chan os.Signal) {
+func (ws *WsClient) Close() {
+	ws.wg.Wait()
 	for {
 		select {
-		case sig := <-sigChan:
+
+		case sig := <-ws.ctx.Done():
 			fmt.Printf("\nReceived signal: %s. Exiting...\n", sig)
-			return
-		case <-ws.done:
-			log.Printf("dial %s error \n", ws.address)
-			return
-		case t := <-ws.err:
-			log.Printf("error %s error \n", t)
+			if ws.conn != nil {
+				close(ws.send)
+				ws.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+				ws.conn.Close()
+				ws.conn = nil
+			}
+
 			return
 		}
 	}
@@ -56,26 +65,19 @@ func (ws *WsClient) connect() {
 
 	conn, _, err := dialer.Dial(ws.address, nil)
 	if err != nil {
-		ws.err <- err
 		return
 	}
 
 	ws.conn = conn
 	log.Printf("connected to server %s", ws.address)
-
-	go ws.write()
-	ws.read()
 }
 
 func (ws *WsClient) read() {
-	defer ws.conn.Close()
-
 	for {
 		_, message, err := ws.conn.ReadMessage()
 		if err != nil {
 			log.Println("read:", err)
-			ws.done <- true
-			break
+			return
 		}
 		log.Printf("recv: %s", message)
 	}
@@ -84,15 +86,16 @@ func (ws *WsClient) read() {
 func (ws *WsClient) write() {
 	for {
 		select {
-		case msg := <-ws.send:
+		case msg, ok := <-ws.send:
+			if !ok {
+				log.Println("send channel closed")
+				return
+			}
 			err := ws.conn.WriteMessage(websocket.TextMessage, msg)
 			if err != nil {
 				log.Println("write:", err)
-				ws.done <- true
 				return
 			}
-		case <-ws.done:
-			return
 		}
 	}
 }
