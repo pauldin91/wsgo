@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
-	"fmt"
+	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/pauldin91/wsgo/src/core"
@@ -15,60 +13,18 @@ import (
 
 func main() {
 	// Signal handling setup
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	host := flag.String("host", "wss://localhost:6443/ws", "Server host")
+	host := "wss://localhost:6443/ws" //flag.String("host", "wss://localhost:6443/ws", "Server host")
 
 	flag.Parse()
 
-	client := core.NewWsClient(ctx, *host)
+	client := core.NewWsClient(ctx, host)
 
-	go func() {
-		sig := <-sigChan
-		fmt.Printf("\nReceived signal: %s. Exiting...\n", sig)
-		cancel()
-	}()
+	<-ctx.Done()
+	log.Println("[main] shutdown signal received")
 
-	go client.Close()
+	client.Close()
 
-	readFromConsole(ctx, client)
-
-}
-
-func readFromConsole(ctx context.Context, client *core.WsClient) {
-	// Signal handling setup
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Input reader setup
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Println("Type something (Ctrl+C to exit):")
-
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("Exiting...")
-			return
-
-		default:
-			input, err := reader.ReadString('\n')
-			if err != nil {
-				fmt.Println("Read error:", err)
-				return
-			}
-
-			text := strings.TrimSpace(input)
-			if text == "exit" {
-				fmt.Println("Exiting by user command.")
-				return
-			}
-
-			client.Send(text)
-		}
-	}
 }
