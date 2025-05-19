@@ -33,14 +33,16 @@ func NewWsClient(ctx context.Context, address string) *WsClient {
 		send:       make(chan []byte),
 		socketChan: make(chan []byte),
 	}
-	ws.connect()
+	return ws
+}
 
+func (ws *WsClient) Connect() {
+	ws.connect()
 	if ws.conn != nil {
 		ws.read()
 		ws.write()
 		ws.readFromConsole()
 	}
-	return ws
 }
 
 func (ws *WsClient) Close() {

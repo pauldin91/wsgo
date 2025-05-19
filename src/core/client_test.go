@@ -1,27 +1,29 @@
-package main
+package core
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"github.com/pauldin91/wsgo/src/core"
+	"testing"
 )
 
-func main() {
+func TestClient(t *testing.T) {
 	// Signal handling setup
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	host := "localhost:6443" //flag.String("host", "wss://localhost:6443/ws", "Server host")
+	host := "wss://localhost:6443/ws" //flag.String("host", "wss://localhost:6443/ws", "Server host")
 
-	server := core.NewWsServer(ctx, host)
+	flag.Parse()
 
-	server.Start()
+	client := NewWsClient(ctx, host)
+	client.Connect()
 	<-ctx.Done()
 	log.Println("[main] shutdown signal received")
-	server.Shutdown()
+
+	client.Close()
 
 }
