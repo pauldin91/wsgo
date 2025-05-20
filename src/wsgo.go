@@ -1,6 +1,9 @@
 package wsgo
 
-import "github.com/pauldin91/wsgo/src/core"
+import (
+	"github.com/pauldin91/wsgo/src/client"
+	"github.com/pauldin91/wsgo/src/server"
+)
 
-type WsClient = core.WsClient
-type WsServer = core.WsServer
+type WsClient = client.WsClient
+type WsServer = server.WsServer
