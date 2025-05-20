@@ -61,17 +61,22 @@ func (ws *WsServer) waitForSignal() {
 }
 
 func (ws *WsServer) Shutdown() {
+	for _, c := range ws.sockets {
+		c.Close()
+	}
 	close(ws.errChan)
 	ws.wg.Wait()
 }
 
 func (ws *WsServer) StartTls(certFile, certKey string) {
-	http.HandleFunc("/ws", ws.wsHandler)
 
-	log.Printf("INFO: WS server started on %s\n", ws.address)
-	if err := http.ListenAndServeTLS(ws.address, certFile, certKey, nil); err != nil {
-		log.Fatal("Could not start WebSocket server:", err)
-	}
+	go func() {
+		http.HandleFunc("/ws", ws.wsHandler)
+		log.Printf("INFO: WS server started on %s\n", ws.address)
+		if err := http.ListenAndServeTLS(ws.address, certFile, certKey, nil); err != nil {
+			log.Fatal("Could not start WebSocket server:", err)
+		}
+	}()
 }
 
 func (ws *WsServer) sendClient(clientID string, message any) {
