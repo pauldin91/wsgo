@@ -21,7 +21,12 @@ func TestClient(t *testing.T) {
 
 	client := NewWsClient(ctx, host)
 	client.Connect()
+	client.Send("test")
+
+	os.Interrupt.Signal()
+
 	<-ctx.Done()
+
 	log.Println("[main] shutdown signal received")
 
 	client.Close()

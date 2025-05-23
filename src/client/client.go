@@ -26,9 +26,9 @@ type WsClient struct {
 func NewWsClient(ctx context.Context, address string) *WsClient {
 	context, cancel := context.WithCancel(ctx)
 	var ws = &WsClient{
+		wg:         &sync.WaitGroup{},
 		address:    address,
 		ctx:        context,
-		wg:         &sync.WaitGroup{},
 		cnl:        cancel,
 		send:       make(chan []byte),
 		socketChan: make(chan []byte),
@@ -36,12 +36,14 @@ func NewWsClient(ctx context.Context, address string) *WsClient {
 	return ws
 }
 
-func (ws *WsClient) Connect() {
+func (ws *WsClient) Connect(console bool) {
 	ws.connect()
 	if ws.conn != nil {
 		ws.read()
 		ws.write()
-		ws.readFromConsole()
+		if console {
+			ws.readToSend()
+		}
 	}
 }
 
@@ -74,79 +76,63 @@ func (ws *WsClient) connect() {
 	log.Printf("connected to server %s", ws.address)
 }
 
-func (client *WsClient) readFromConsole() {
-	client.wg.Add(1)
-	go func() {
-		defer client.wg.Done()
-
-		errorChan := make(chan error)
-		client.readInput(errorChan)
-
-		fmt.Println("[console] Type something (Ctrl+C to exit):")
-
-		for {
-			select {
-			case <-client.ctx.Done():
-				fmt.Println("[console] Exiting...")
-				return
-
-			case msg := <-client.send:
-				log.Printf("[console] msg: %s", msg)
-
-			case err := <-errorChan:
-				log.Printf("[console] error: %v", err)
-				return
-			}
-		}
-	}()
-}
-
 func (ws *WsClient) read() {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
 
 		errorChan := make(chan error)
-		ws.readSocket(errorChan)
+		ws.readFromSocket(errorChan)
+		ws.handle(errorChan)
+	}()
+}
 
-		for {
-			select {
-			case <-ws.ctx.Done():
-				log.Println("[read] context cancelled, closing WebSocket...")
-				_ = ws.conn.Close()
+func (ws *WsClient) handle(errorChan chan error) {
+	for {
+		select {
+		case <-ws.ctx.Done():
+			log.Println("[read] context cancelled, closing WebSocket...")
+			_ = ws.conn.Close()
+			return
+
+		case msg := <-ws.socketChan:
+			log.Printf("[read] msg: %s", msg)
+
+		case err := <-errorChan:
+			log.Printf("[read] error: %v", err)
+			return
+
+		case msg, ok := <-ws.send:
+			if !ok {
+				log.Println("[write] send channel closed")
 				return
-
-			case msg := <-ws.socketChan:
-				log.Printf("[read] msg: %s", msg)
-
-			case err := <-errorChan:
-				log.Printf("[read] error: %v", err)
+			}
+			err := ws.conn.WriteMessage(websocket.TextMessage, msg)
+			if err != nil {
+				log.Println("[write] error", err)
 				return
 			}
 		}
-	}()
+	}
 }
 
 func (ws *WsClient) write() {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
+		ws.handle(make(chan error))
+	}()
+}
+
+func (ws *WsClient) readFromSocket(errorChan chan error) {
+	go func() {
 		for {
-			select {
-			case <-ws.ctx.Done():
-				log.Println("[write] Exiting...")
+			_, message, err := ws.conn.ReadMessage()
+			if err != nil {
+				errorChan <- err
 				return
-			case msg, ok := <-ws.send:
-				if !ok {
-					log.Println("[write] send channel closed")
-					return
-				}
-				err := ws.conn.WriteMessage(websocket.TextMessage, msg)
-				if err != nil {
-					log.Println("[write] error", err)
-					return
-				}
 			}
+			ws.socketChan <- message
 		}
 	}()
 }
@@ -173,15 +159,14 @@ func (ws *WsClient) readInput(errorChan chan error) {
 	}()
 }
 
-func (ws *WsClient) readSocket(errorChan chan error) {
+func (ws *WsClient) readToSend() {
+	ws.wg.Add(1)
 	go func() {
-		for {
-			_, message, err := ws.conn.ReadMessage()
-			if err != nil {
-				errorChan <- err
-				return
-			}
-			ws.socketChan <- message
-		}
+		defer ws.wg.Done()
+
+		errorChan := make(chan error)
+		ws.readInput(errorChan)
+
+		ws.handle(errorChan)
 	}()
 }
