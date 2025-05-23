@@ -20,10 +20,11 @@ func TestClient(t *testing.T) {
 	flag.Parse()
 
 	client := NewWsClient(ctx, host)
-	client.Connect()
+	client.Connect(false)
 	client.Send("test")
 
-	os.Interrupt.Signal()
+	p, _ := os.FindProcess(os.Getpid())
+	p.Signal(syscall.SIGTERM)
 
 	<-ctx.Done()
 
