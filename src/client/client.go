@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"log"
 	"sync"
 
@@ -35,7 +36,7 @@ func NewWsClient(ctx context.Context, address string) *WsClient {
 func (ws *WsClient) Connect() {
 	ws.connect()
 	if ws.conn != nil {
-		ws.ReadFromServer()
+		ws.readFromServer()
 	}
 }
 
@@ -54,6 +55,11 @@ func (ws *WsClient) connect() {
 	log.Printf("connected to server %s", ws.address)
 }
 
+func (ws *WsClient) GetConnId() string {
+	return fmt.Sprintf("%p", ws.conn)
+
+}
+
 func (ws *WsClient) Close() {
 
 	if ws.conn != nil {
@@ -64,7 +70,7 @@ func (ws *WsClient) Close() {
 	ws.wg.Wait()
 }
 
-func (ws *WsClient) ReadFromServer() {
+func (ws *WsClient) readFromServer() {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()

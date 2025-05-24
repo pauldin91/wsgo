@@ -44,6 +44,17 @@ func (ws *WsServer) Start() {
 	ws.waitForSignal()
 }
 
+func (ws *WsServer) StartTls(certFile, certKey string) {
+
+	go func() {
+		http.HandleFunc("/ws", ws.wsHandler)
+		log.Printf("INFO: WS server started on %s\n", ws.address)
+		if err := http.ListenAndServeTLS(ws.address, certFile, certKey, nil); err != nil {
+			log.Fatal("Could not start WebSocket server:", err)
+		}
+	}()
+}
+
 func (ws *WsServer) waitForSignal() {
 	go func() {
 		for {
@@ -68,18 +79,7 @@ func (ws *WsServer) Shutdown() {
 	ws.wg.Wait()
 }
 
-func (ws *WsServer) StartTls(certFile, certKey string) {
-
-	go func() {
-		http.HandleFunc("/ws", ws.wsHandler)
-		log.Printf("INFO: WS server started on %s\n", ws.address)
-		if err := http.ListenAndServeTLS(ws.address, certFile, certKey, nil); err != nil {
-			log.Fatal("Could not start WebSocket server:", err)
-		}
-	}()
-}
-
-func (ws *WsServer) sendClient(clientID string, message any) {
+func (ws *WsServer) sendToClient(clientID string, message any) {
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 
@@ -112,7 +112,7 @@ func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
 
 	log.Print(initialMsg)
-	ws.sendClient(clientID, initialMsg)
+	ws.sendToClient(clientID, initialMsg)
 
 	defer ws.closeConnection(clientID)
 
@@ -127,14 +127,6 @@ func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ws *WsServer) closeConnection(clientID string) {
-	ws.mutex.Lock()
-	ws.sockets[clientID].Close()
-	delete(ws.sockets, clientID)
-	ws.mutex.Unlock()
-	fmt.Println("Client disconnected:", clientID)
-}
-
 func (ws *WsServer) broadcastMessage(message string) {
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
@@ -146,4 +138,12 @@ func (ws *WsServer) broadcastMessage(message string) {
 			delete(ws.sockets, clientID)
 		}
 	}
+}
+
+func (ws *WsServer) closeConnection(clientID string) {
+	ws.mutex.Lock()
+	ws.sockets[clientID].Close()
+	delete(ws.sockets, clientID)
+	ws.mutex.Unlock()
+	fmt.Println("Client disconnected:", clientID)
 }
