@@ -1,16 +1,18 @@
-package client
+package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"testing"
+
+	"github.com/pauldin91/wsgo/src/client"
 )
 
-func TestClient(t *testing.T) {
+func main() {
 	// Signal handling setup
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -19,17 +21,13 @@ func TestClient(t *testing.T) {
 
 	flag.Parse()
 
-	client := NewWsClient(ctx, host)
+	client := client.NewWsClient(ctx, host)
 	client.Connect()
-	client.Send("test")
-
-	p, _ := os.FindProcess(os.Getpid())
-	p.Signal(syscall.SIGTERM)
+	client.ListenForInput(bufio.NewReader(os.Stdin))
 
 	<-ctx.Done()
 
 	log.Println("[main] shutdown signal received")
 
 	client.Close()
-
 }

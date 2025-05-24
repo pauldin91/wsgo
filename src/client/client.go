@@ -102,14 +102,6 @@ func (ws *WsClient) Send(message string) {
 	}
 }
 
-func (ws *WsClient) WriteToServer() {
-	ws.wg.Add(1)
-	go func() {
-		defer ws.wg.Done()
-		ws.handle(make(chan error))
-	}()
-}
-
 func (ws *WsClient) handle(errorChan chan error) {
 	for {
 		select {
@@ -160,7 +152,7 @@ func (ws *WsClient) readInput(reader *bufio.Reader, errorChan chan error) {
 	}()
 }
 
-func (ws *WsClient) readFromInput(reader *bufio.Reader) {
+func (ws *WsClient) ListenForInput(reader *bufio.Reader) {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
