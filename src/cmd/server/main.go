@@ -16,7 +16,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	host := flag.String("host", "ws://localhost:6443/ws", "Server host")
+	host := flag.String("host", "ws://localhost:6443", "Server host")
+	flag.Parse()
 
 	server := server.NewWsServer(ctx, *host)
 
