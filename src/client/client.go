@@ -1,10 +1,12 @@
 package client
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -34,13 +36,13 @@ func NewWsClient(ctx context.Context, address string) *WsClient {
 }
 
 func (ws *WsClient) Connect() {
-	ws.connect()
+	ws.init()
 	if ws.conn != nil {
 		ws.readFromServer()
 	}
 }
 
-func (ws *WsClient) connect() {
+func (ws *WsClient) init() {
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -137,9 +139,7 @@ func (ws *WsClient) handle(errorChan chan error) {
 	}
 }
 
-/*
-func (ws *WsClient) readInput(errorChan chan error) {
-	reader := bufio.NewReader(os.Stdin)
+func (ws *WsClient) readInput(reader *bufio.Reader, errorChan chan error) {
 
 	go func() {
 		for {
@@ -160,14 +160,14 @@ func (ws *WsClient) readInput(errorChan chan error) {
 	}()
 }
 
-func (ws *WsClient) readFromInput() {
+func (ws *WsClient) readFromInput(reader *bufio.Reader) {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
 
 		errorChan := make(chan error)
-		ws.readInput(errorChan)
-
+		ws.readInput(reader, errorChan)
 		ws.handle(errorChan)
+
 	}()
-}*/
+}
