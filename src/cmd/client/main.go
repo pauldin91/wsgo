@@ -17,11 +17,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	host := "ws://localhost:6443/ws" //flag.String("host", "wss://localhost:6443/ws", "Server host")
+	host := flag.String("host", "ws://localhost:6443/ws", "Server host")
 
 	flag.Parse()
 
-	client := client.NewWsClient(ctx, host)
+	client := client.NewWsClient(ctx, *host)
 	client.Connect()
 	client.ListenForInput(bufio.NewReader(os.Stdin))
 

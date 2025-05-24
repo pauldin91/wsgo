@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -15,9 +16,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	host := "localhost:6443" //flag.String("host", "wss://localhost:6443/ws", "Server host")
+	host := flag.String("host", "ws://localhost:6443/ws", "Server host")
 
-	server := server.NewWsServer(ctx, host)
+	server := server.NewWsServer(ctx, *host)
 
 	server.Start()
 	<-ctx.Done()
