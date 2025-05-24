@@ -20,7 +20,7 @@ func TestClient(t *testing.T) {
 	flag.Parse()
 
 	client := NewWsClient(ctx, host)
-	client.Connect(false)
+	client.Connect()
 	client.Send("test")
 
 	p, _ := os.FindProcess(os.Getpid())

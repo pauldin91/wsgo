@@ -1,13 +1,9 @@
 package client
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
-	"fmt"
 	"log"
-	"os"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -36,29 +32,11 @@ func NewWsClient(ctx context.Context, address string) *WsClient {
 	return ws
 }
 
-func (ws *WsClient) Connect(console bool) {
+func (ws *WsClient) Connect() {
 	ws.connect()
 	if ws.conn != nil {
-		ws.read()
-		ws.write()
-		if console {
-			ws.readToSend()
-		}
+		ws.ReadFromServer()
 	}
-}
-
-func (ws *WsClient) Close() {
-
-	if ws.conn != nil {
-		ws.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		ws.conn.Close()
-	}
-	close(ws.send)
-	ws.wg.Wait()
-}
-
-func (ws *WsClient) Send(message string) {
-	ws.send <- []byte(message)
 }
 
 func (ws *WsClient) connect() {
@@ -76,14 +54,51 @@ func (ws *WsClient) connect() {
 	log.Printf("connected to server %s", ws.address)
 }
 
-func (ws *WsClient) read() {
+func (ws *WsClient) Close() {
+
+	if ws.conn != nil {
+		ws.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		ws.conn.Close()
+	}
+	close(ws.send)
+	ws.wg.Wait()
+}
+
+func (ws *WsClient) ReadFromServer() {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
 
 		errorChan := make(chan error)
-		ws.readFromSocket(errorChan)
+		ws.readSocketBuffer(errorChan)
 		ws.handle(errorChan)
+	}()
+}
+
+func (ws *WsClient) readSocketBuffer(errorChan chan error) {
+	go func() {
+		for {
+			_, message, err := ws.conn.ReadMessage()
+			if err != nil {
+				errorChan <- err
+				return
+			}
+			ws.socketChan <- message
+		}
+	}()
+}
+
+func (ws *WsClient) Send(message string) {
+	if ws.conn != nil {
+		ws.send <- []byte(message)
+	}
+}
+
+func (ws *WsClient) WriteToServer() {
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		ws.handle(make(chan error))
 	}()
 }
 
@@ -116,27 +131,7 @@ func (ws *WsClient) handle(errorChan chan error) {
 	}
 }
 
-func (ws *WsClient) write() {
-	ws.wg.Add(1)
-	go func() {
-		defer ws.wg.Done()
-		ws.handle(make(chan error))
-	}()
-}
-
-func (ws *WsClient) readFromSocket(errorChan chan error) {
-	go func() {
-		for {
-			_, message, err := ws.conn.ReadMessage()
-			if err != nil {
-				errorChan <- err
-				return
-			}
-			ws.socketChan <- message
-		}
-	}()
-}
-
+/*
 func (ws *WsClient) readInput(errorChan chan error) {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -159,7 +154,7 @@ func (ws *WsClient) readInput(errorChan chan error) {
 	}()
 }
 
-func (ws *WsClient) readToSend() {
+func (ws *WsClient) readFromInput() {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
@@ -169,4 +164,4 @@ func (ws *WsClient) readToSend() {
 
 		ws.handle(errorChan)
 	}()
-}
+}*/
