@@ -53,6 +53,7 @@ func (ws *WsServer) StartTls(certFile, certKey string) {
 			log.Fatal("Could not start WebSocket server:", err)
 		}
 	}()
+	ws.waitForSignal()
 }
 
 func (ws *WsServer) waitForSignal() {
