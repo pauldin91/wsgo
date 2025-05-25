@@ -80,6 +80,10 @@ func (ws *WsServer) Shutdown() {
 	ws.wg.Wait()
 }
 
+func (ws *WsServer) GetConnections() map[string]*websocket.Conn {
+	return ws.sockets
+}
+
 func (ws *WsServer) sendToClient(clientID string, message any) {
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
