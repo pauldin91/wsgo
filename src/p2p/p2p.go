@@ -61,6 +61,17 @@ func (p2p *P2PServer) Start(peers []string) {
 	p2p.wait()
 }
 
+func (p2p *P2PServer) StartTls(certFile, certKey string, peers []string) {
+	p2p.wg.Add(1)
+	go func() {
+		defer p2p.wg.Done()
+		p2p.server.StartTls(certFile, certKey)
+		p2p.connectToPeers(peers)
+	}()
+
+	p2p.wait()
+}
+
 func (p2p *P2PServer) wait() {
 	go func() {
 		for {
