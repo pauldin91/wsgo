@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/gorilla/websocket"
 	"github.com/pauldin91/wsgo/src/client"
 	"github.com/pauldin91/wsgo/src/server"
 )
@@ -14,6 +15,7 @@ import (
 type p2p interface {
 	Start([]string)
 	ExposeFirstPeerForInput()
+	GetConnections() map[string]string
 	Shutdown()
 }
 
@@ -77,6 +79,9 @@ func (p2p *P2PServer) GetConnections() map[string]string {
 		result[i] = c.RemoteAddr().String()
 	}
 	return result
+}
+func (p2p *P2PServer) GetConnectedClients() map[string]*websocket.Conn {
+	return p2p.server.GetConnections()
 }
 
 func (p2p *P2PServer) Shutdown() {
