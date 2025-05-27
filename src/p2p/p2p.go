@@ -91,3 +91,9 @@ func (p2p *P2PServer) Shutdown() {
 	p2p.wg.Wait()
 	p2p.server.Shutdown()
 }
+
+func (p2p *P2PServer) BroadcastMessage(message string) {
+	for _, c := range p2p.GetConnectedClients() {
+		c.WriteJSON(message)
+	}
+}
