@@ -16,7 +16,7 @@ type TcpServer struct {
 	cancel      context.CancelFunc
 	wg          *sync.WaitGroup
 	errChan     chan error
-	listener    net.Listener
+	listener    *net.Listener
 }
 
 func NewTcpServer(ctx context.Context, serveAddress string) TcpServer {
@@ -39,7 +39,7 @@ func (ws *TcpServer) Start() {
 			ws.handleConnections()
 		}()
 		listener, err := net.Listen("tcp", ws.address)
-		ws.listener = listener
+		ws.listener = &listener
 		if err != nil {
 			log.Fatal("Could not start Tcp server:", err)
 		}
@@ -114,7 +114,7 @@ func (ws *TcpServer) closeConnection(clientID string) {
 func (ws *TcpServer) handleConnections() {
 
 	for {
-		conn, err := ws.listener.Accept()
+		conn, err := (*ws.listener).Accept()
 		if err != nil {
 			fmt.Println("could not estblish connection")
 		}
