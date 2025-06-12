@@ -84,19 +84,6 @@ func (ws *WsServer) GetConnections() map[string]*websocket.Conn {
 	return ws.sockets
 }
 
-func (ws *WsServer) sendToClient(clientID string, message any) {
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-
-	if conn, ok := ws.sockets[clientID]; ok {
-		if err := conn.WriteJSON(message); err != nil {
-			log.Println("Error sending to client", clientID, ":", err)
-			conn.Close()
-			delete(ws.sockets, clientID)
-		}
-	}
-}
-
 func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -117,7 +104,6 @@ func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
 
 	log.Print(initialMsg)
-	ws.sendToClient(clientID, initialMsg)
 
 	defer ws.closeConnection(clientID)
 

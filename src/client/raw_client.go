@@ -106,8 +106,10 @@ func (ws *TcpClient) handle(errorChan chan error) {
 			_ = (*ws.conn).Close()
 			return
 
-		case msg := <-ws.socketChan:
-			log.Printf("[read] msg: %s", msg)
+		case msg, ok := <-ws.socketChan:
+			if len(msg) > 0 && ok {
+				log.Printf("[read] msg: %s", msg)
+			}
 
 		case err := <-errorChan:
 			log.Printf("[read] error: %v", err)
@@ -119,6 +121,7 @@ func (ws *TcpClient) handle(errorChan chan error) {
 				return
 			}
 			_, err := (*ws.conn).Write(msg)
+			log.Println(string(msg))
 			if err != nil {
 				log.Println("[write] error", err)
 				return

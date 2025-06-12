@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -33,18 +35,18 @@ func NewTcpServer(ctx context.Context, serveAddress string) TcpServer {
 }
 
 func (ws *TcpServer) Start() {
+
+	log.Printf("INFO: WS server started on %s\n", ws.address)
+	listener, err := net.Listen("tcp", ws.address)
+	ws.listener = &listener
 	go func() {
-		log.Printf("INFO: WS server started on %s\n", ws.address)
-		go func() {
-			ws.handleConnections()
-		}()
-		listener, err := net.Listen("tcp", ws.address)
-		ws.listener = &listener
-		if err != nil {
-			log.Fatal("Could not start Tcp server:", err)
-		}
+		ws.listenForConnections()
 	}()
+	if err != nil {
+		log.Fatal("Could not start Tcp server:", err)
+	}
 	ws.waitForSignal()
+
 }
 
 func (ws *TcpServer) waitForSignal() {
@@ -75,20 +77,6 @@ func (ws *TcpServer) GetConnections() map[string]*net.Conn {
 	return ws.connections
 }
 
-func (ws *TcpServer) sendToClient(clientID string, message string) {
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-
-	if conn, ok := ws.connections[clientID]; ok {
-
-		if _, err := (*conn).Write([]byte(message)); err != nil {
-			log.Println("Error sending to client", clientID, ":", err)
-			(*conn).Close()
-			delete(ws.connections, clientID)
-		}
-	}
-}
-
 func (ws *TcpServer) broadcastMessage(message string) {
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
@@ -111,7 +99,7 @@ func (ws *TcpServer) closeConnection(clientID string) {
 	fmt.Println("Client disconnected:", clientID)
 }
 
-func (ws *TcpServer) handleConnections() {
+func (ws *TcpServer) listenForConnections() {
 
 	for {
 		conn, err := (*ws.listener).Accept()
@@ -125,22 +113,29 @@ func (ws *TcpServer) handleConnections() {
 		ws.mutex.Unlock()
 
 		initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
-
 		log.Print(initialMsg)
+		ws.wg.Add(1)
+		go ws.handleConnection(clientID)
+	}
+}
 
-		ws.sendToClient(clientID, initialMsg)
+func (server *TcpServer) handleConnection(clientID string) {
+	defer server.wg.Done()
+	defer server.closeConnection(clientID)
 
-		defer ws.closeConnection(clientID)
+	for {
+		reader := bufio.NewReader(*server.connections[clientID])
+		buffer, _, err := reader.ReadLine()
 
-		for {
-			var bytes []byte
-			_, err := conn.Read(bytes)
-			if err != nil {
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
 				break
 			}
-			msg := fmt.Sprintf("[client] %s says : %s\n", clientID, string(bytes))
-			ws.broadcastMessage(msg)
-			log.Printf("[client] %s: says %s\n", clientID, string(bytes))
+			log.Printf("Error on clients [%s] connection : %v", clientID, err)
+			break
 		}
+		msg := fmt.Sprintf("[client] %s says: %s\n", clientID, string(buffer))
+		server.broadcastMessage(msg)
+		log.Printf("[client] %s says: %s\n", clientID, string(buffer))
 	}
 }
