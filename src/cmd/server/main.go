@@ -22,8 +22,8 @@ func main() {
 	server := server.NewTcpServer(ctx, *host)
 	server.Start()
 
-	p, _ := os.FindProcess(os.Getpid())
-	p.Signal(syscall.SIGTERM)
+	// p, _ := os.FindProcess(os.Getpid())
+	// p.Signal(syscall.SIGTERM)
 	<-ctx.Done()
 	log.Println("[main] shutdown signal received")
 	server.Shutdown()

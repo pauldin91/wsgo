@@ -81,20 +81,20 @@ func (ws *TcpClient) readFromServer() {
 func (ws *TcpClient) readSocketBuffer(errorChan chan error) {
 	go func() {
 		for {
-			var byteBuffer []byte
-			_, err := (*ws.conn).Read(byteBuffer)
+			reader := bufio.NewReader(*ws.conn)
+			buffer, _, err := reader.ReadLine()
 			if err != nil {
 				errorChan <- err
 				return
 			}
-			ws.socketChan <- byteBuffer
+			ws.socketChan <- buffer
 		}
 	}()
 }
 
 func (ws *TcpClient) Send(message string) {
 	if ws.conn != nil {
-		ws.send <- []byte(message)
+		ws.send <- []byte(message + "\n")
 	}
 }
 
@@ -102,7 +102,7 @@ func (ws *TcpClient) handle(errorChan chan error) {
 	for {
 		select {
 		case <-ws.ctx.Done():
-			log.Println("[read] context cancelled, closing WebSocket...")
+			fmt.Println("[read] context cancelled, closing WebSocket...")
 			_ = (*ws.conn).Close()
 			return
 
@@ -112,18 +112,18 @@ func (ws *TcpClient) handle(errorChan chan error) {
 			}
 
 		case err := <-errorChan:
-			log.Printf("[read] error: %v", err)
+			fmt.Printf("[read] error: %v", err)
 			return
 
 		case msg, ok := <-ws.send:
 			if !ok {
-				log.Println("[write] send channel closed")
+				fmt.Println("[write] send channel closed")
 				return
 			}
 			_, err := (*ws.conn).Write(msg)
-			log.Println(string(msg))
+
 			if err != nil {
-				log.Println("[write] error", err)
+				fmt.Println("[write] error", err)
 				return
 			}
 		}
@@ -134,14 +134,14 @@ func (ws *TcpClient) readInput(reader *bufio.Reader, errorChan chan error) {
 
 	go func() {
 		for {
-			input, err := reader.ReadString('\n')
+			input, _, err := reader.ReadLine()
 			if err != nil {
 				errorChan <- err
 				fmt.Println("[console] Read error:", err)
 				return
 			}
 
-			text := strings.TrimSpace(input)
+			text := strings.TrimSpace(string(input))
 			if text == "exit" {
 				fmt.Println("[console] Exiting by user command.")
 				return

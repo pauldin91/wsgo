@@ -23,6 +23,7 @@ func main() {
 
 	client := client.NewTcpClient(ctx, *host)
 	client.Connect()
+	client.Send("entered")
 	client.ListenForInput(bufio.NewReader(os.Stdin))
 
 	<-ctx.Done()

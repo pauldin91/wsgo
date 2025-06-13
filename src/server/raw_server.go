@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -128,7 +129,7 @@ func (server *TcpServer) handleConnection(clientID string) {
 		buffer, _, err := reader.ReadLine()
 
 		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
+			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				break
 			}
 			log.Printf("Error on clients [%s] connection : %v", clientID, err)
