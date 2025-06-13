@@ -1,0 +1,47 @@
+services:
+  tcp.server:
+    build:
+      context: .
+      dockerfile: src/docker/raw.server.dockerfile
+    ports:
+      - "4443:4443"
+    environment:
+      - host=:4443
+    networks:
+      - wsgo
+
+  tcp.client:
+    build:
+      dockerfile: src/docker/raw.client.dockerfile
+    environment:
+      - host=:4443
+    networks:
+      - wsgo
+    depends_on:
+      - tcp.server
+
+  ws.server:
+    build:
+      dockerfile: src/docker/ws.server.dockerfile
+    ports:
+      - "6443:6443"
+    environment:
+      - host=:6443
+    networks:
+      - wsgo
+
+  ws.client:
+    build:
+      dockerfile: src/docker/ws.client.dockerfile
+    ports:
+      - "6443:6443"
+    environment:
+      - host=:6443
+    networks:
+      - wsgo
+    depends_on:
+      - ws.server    
+
+networks:
+    wsgo:
+      driver: bridge

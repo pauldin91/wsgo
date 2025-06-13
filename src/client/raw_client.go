@@ -3,7 +3,9 @@ package client
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strings"
@@ -14,42 +16,40 @@ type TcpClient struct {
 	address    string
 	send       chan []byte
 	socketChan chan []byte
+	errorChan  chan error
 	conn       *net.Conn
 	wg         *sync.WaitGroup
 	ctx        context.Context
-	cnl        context.CancelFunc
 }
 
 func NewTcpClient(ctx context.Context, address string) *TcpClient {
-	context, cancel := context.WithCancel(ctx)
+	context := context.WithoutCancel(ctx)
 	var ws = &TcpClient{
 		wg:         &sync.WaitGroup{},
 		address:    address,
 		ctx:        context,
-		cnl:        cancel,
 		send:       make(chan []byte),
 		socketChan: make(chan []byte),
+		errorChan:  make(chan error),
 	}
 	return ws
 }
 
 func (ws *TcpClient) Connect() {
-	ws.init()
-	if ws.conn != nil {
-		ws.readFromServer()
-	}
-}
-
-func (ws *TcpClient) init() {
-
 	conn, err := net.Dial("tcp", ws.address)
 	if err != nil {
 		log.Printf("connection error :%s\n", err)
 		return
 	}
-
 	ws.conn = &conn
 	log.Printf("connected to server %s", ws.address)
+
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		ws.readSocketBuffer()
+		ws.handle()
+	}()
 }
 
 func (ws *TcpClient) GetConnId() string {
@@ -67,24 +67,16 @@ func (ws *TcpClient) Close() {
 	ws.wg.Wait()
 }
 
-func (ws *TcpClient) readFromServer() {
-	ws.wg.Add(1)
-	go func() {
-		defer ws.wg.Done()
-
-		errorChan := make(chan error)
-		ws.readSocketBuffer(errorChan)
-		ws.handle(errorChan)
-	}()
-}
-
-func (ws *TcpClient) readSocketBuffer(errorChan chan error) {
+func (ws *TcpClient) readSocketBuffer() {
 	go func() {
 		for {
 			reader := bufio.NewReader(*ws.conn)
 			buffer, _, err := reader.ReadLine()
 			if err != nil {
-				errorChan <- err
+				if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
+					return
+				}
+				ws.errorChan <- err
 				return
 			}
 			ws.socketChan <- buffer
@@ -98,7 +90,7 @@ func (ws *TcpClient) Send(message string) {
 	}
 }
 
-func (ws *TcpClient) handle(errorChan chan error) {
+func (ws *TcpClient) handle() {
 	for {
 		select {
 		case <-ws.ctx.Done():
@@ -111,7 +103,7 @@ func (ws *TcpClient) handle(errorChan chan error) {
 				log.Printf("[read] msg: %s", msg)
 			}
 
-		case err := <-errorChan:
+		case err := <-ws.errorChan:
 			fmt.Printf("[read] error: %v", err)
 			return
 
@@ -130,13 +122,13 @@ func (ws *TcpClient) handle(errorChan chan error) {
 	}
 }
 
-func (ws *TcpClient) readInput(reader *bufio.Reader, errorChan chan error) {
+func (ws *TcpClient) readInput(reader *bufio.Reader) {
 
 	go func() {
 		for {
 			input, _, err := reader.ReadLine()
 			if err != nil {
-				errorChan <- err
+				ws.errorChan <- err
 				fmt.Println("[console] Read error:", err)
 				return
 			}
@@ -156,9 +148,16 @@ func (ws *TcpClient) ListenForInput(reader *bufio.Reader) {
 	go func() {
 		defer ws.wg.Done()
 
-		errorChan := make(chan error)
-		ws.readInput(reader, errorChan)
-		ws.handle(errorChan)
+		ws.readInput(reader)
+		ws.handle()
 
+	}()
+}
+
+func (ws *TcpClient) Input(reader *bufio.Reader, handler func(*bufio.Reader)) {
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		handler(reader)
 	}()
 }
