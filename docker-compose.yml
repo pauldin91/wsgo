@@ -1,5 +1,8 @@
+version: '3.8'
+
 services:
   tcp.server:
+    init: true
     build:
       context: .
       dockerfile: src/docker/raw.server.dockerfile
@@ -12,9 +15,12 @@ services:
 
   tcp.client:
     build:
+      context: .
       dockerfile: src/docker/raw.client.dockerfile
     environment:
-      - host=:4443
+      - host=tcp.server:4443
+    stdin_open: true 
+    tty: true 
     networks:
       - wsgo
     depends_on:
@@ -22,6 +28,7 @@ services:
 
   ws.server:
     build:
+      context: .
       dockerfile: src/docker/ws.server.dockerfile
     ports:
       - "6443:6443"
@@ -32,16 +39,19 @@ services:
 
   ws.client:
     build:
+      context: .
       dockerfile: src/docker/ws.client.dockerfile
     ports:
       - "6443:6443"
     environment:
-      - host=:6443
+      - host=ws.server:6443
+    stdin_open: true 
+    tty: true
     networks:
       - wsgo
     depends_on:
       - ws.server    
 
 networks:
-    wsgo:
-      driver: bridge
+  wsgo:
+    driver: bridge
