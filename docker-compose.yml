@@ -13,19 +13,6 @@ services:
     networks:
       - wsgo
 
-  tcp.client:
-    build:
-      context: .
-      dockerfile: src/docker/raw.client.dockerfile
-    environment:
-      - host=tcp.server:4443
-    stdin_open: true 
-    tty: true 
-    networks:
-      - wsgo
-    depends_on:
-      - tcp.server
-
   ws.server:
     build:
       context: .
@@ -35,22 +22,7 @@ services:
     environment:
       - host=:6443
     networks:
-      - wsgo
-
-  ws.client:
-    build:
-      context: .
-      dockerfile: src/docker/ws.client.dockerfile
-    ports:
-      - "6443:6443"
-    environment:
-      - host=ws.server:6443
-    stdin_open: true 
-    tty: true
-    networks:
-      - wsgo
-    depends_on:
-      - ws.server    
+      - wsgo   
 
 networks:
   wsgo:
