@@ -21,6 +21,7 @@ type TcpClient struct {
 	conn       net.Conn
 	wg         *sync.WaitGroup
 	ctx        context.Context
+	tlsConf    *tls.Config
 }
 
 func NewTcpClient(ctx context.Context, address string) *TcpClient {
@@ -36,28 +37,17 @@ func NewTcpClient(ctx context.Context, address string) *TcpClient {
 	return ws
 }
 
-func (ws *TcpClient) ConnectTls(conf *tls.Config) {
+func (ws *TcpClient) Connect() {
+	var conn net.Conn
+	var err error
 
-	conn, err := tls.Dial("tcp", ws.address, conf)
-	if err != nil {
-		log.Printf("connection error :%s\n", err)
-		return
+	if ws.tlsConf == nil {
+		conn, err = net.Dial("tcp", ws.address)
+	} else {
+		conn, err = tls.Dial("tcp", ws.address, ws.tlsConf)
+
 	}
 
-	ws.conn = conn
-
-	log.Printf("connected to server %s", ws.address)
-
-	ws.wg.Add(1)
-	go func() {
-		defer ws.wg.Done()
-		ws.readSocketBuffer()
-		ws.handle()
-	}()
-}
-
-func (ws *TcpClient) Connect() {
-	conn, err := net.Dial("tcp", ws.address)
 	if err != nil {
 		log.Printf("connection error :%s\n", err)
 		return
