@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +15,7 @@ import (
 type TcpServer struct {
 	address     string
 	mutex       sync.Mutex
-	connections map[string]*net.Conn
+	connections map[string]net.Conn
 	ctx         context.Context
 	cancel      context.CancelFunc
 	wg          *sync.WaitGroup
@@ -28,7 +29,7 @@ func NewTcpServer(ctx context.Context, serveAddress string) TcpServer {
 		address:     serveAddress,
 		ctx:         cotx,
 		cancel:      cancel,
-		connections: make(map[string]*net.Conn),
+		connections: make(map[string]net.Conn),
 		errChan:     make(chan error),
 		mutex:       sync.Mutex{},
 		wg:          &sync.WaitGroup{},
@@ -39,6 +40,25 @@ func (ws *TcpServer) Start() {
 
 	log.Printf("INFO: WS server started on %s\n", ws.address)
 	listener, err := net.Listen("tcp", ws.address)
+	ws.listener = &listener
+	go func() {
+		ws.listenForConnections()
+	}()
+	if err != nil {
+		log.Fatal("Could not start Tcp server:", err)
+	}
+	ws.waitForSignal()
+
+}
+
+func (ws *TcpServer) StartTls(config *tls.Config) {
+	// cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// config := &tls.Config{Certificates: []tls.Certificate{cert}}
+	log.Printf("INFO: WS server started on %s\n", ws.address)
+	listener, err := tls.Listen("tcp", ws.address, config)
 	ws.listener = &listener
 	go func() {
 		ws.listenForConnections()
@@ -68,13 +88,13 @@ func (ws *TcpServer) waitForSignal() {
 
 func (srv *TcpServer) Shutdown() {
 	for _, c := range srv.connections {
-		(*c).Close()
+		c.Close()
 	}
 	close(srv.errChan)
 	srv.wg.Wait()
 }
 
-func (ws *TcpServer) GetConnections() map[string]*net.Conn {
+func (ws *TcpServer) GetConnections() map[string]net.Conn {
 	return ws.connections
 }
 
@@ -84,7 +104,7 @@ func (ws *TcpServer) broadcastMessage(message string) {
 
 	for clientID, conn := range ws.connections {
 
-		if _, err := (*conn).Write([]byte(message)); err != nil {
+		if _, err := conn.Write([]byte(message)); err != nil {
 			log.Println("Error writing to client", clientID, ":", err)
 
 			delete(ws.connections, clientID)
@@ -94,7 +114,7 @@ func (ws *TcpServer) broadcastMessage(message string) {
 
 func (ws *TcpServer) closeConnection(clientID string) {
 	ws.mutex.Lock()
-	(*ws.connections[clientID]).Close()
+	ws.connections[clientID].Close()
 	delete(ws.connections, clientID)
 	ws.mutex.Unlock()
 	fmt.Println("Client disconnected:", clientID)
@@ -110,7 +130,7 @@ func (ws *TcpServer) listenForConnections() {
 		clientID := fmt.Sprintf("%p", conn)
 
 		ws.mutex.Lock()
-		ws.connections[clientID] = &conn
+		ws.connections[clientID] = conn
 		ws.mutex.Unlock()
 
 		initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
@@ -125,7 +145,7 @@ func (server *TcpServer) handleConnection(clientID string) {
 	defer server.closeConnection(clientID)
 
 	for {
-		reader := bufio.NewReader(*server.connections[clientID])
+		reader := bufio.NewReader(server.connections[clientID])
 		buffer, _, err := reader.ReadLine()
 
 		if err != nil {

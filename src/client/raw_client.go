@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +18,7 @@ type TcpClient struct {
 	send       chan []byte
 	socketChan chan []byte
 	errorChan  chan error
-	conn       *net.Conn
+	conn       net.Conn
 	wg         *sync.WaitGroup
 	ctx        context.Context
 }
@@ -35,13 +36,34 @@ func NewTcpClient(ctx context.Context, address string) *TcpClient {
 	return ws
 }
 
+func (ws *TcpClient) ConnectTls(conf *tls.Config) {
+
+	conn, err := tls.Dial("tcp", ws.address, conf)
+	if err != nil {
+		log.Printf("connection error :%s\n", err)
+		return
+	}
+
+	ws.conn = conn
+
+	log.Printf("connected to server %s", ws.address)
+
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		ws.readSocketBuffer()
+		ws.handle()
+	}()
+}
+
 func (ws *TcpClient) Connect() {
 	conn, err := net.Dial("tcp", ws.address)
 	if err != nil {
 		log.Printf("connection error :%s\n", err)
 		return
 	}
-	ws.conn = &conn
+	ws.conn = conn
+
 	log.Printf("connected to server %s", ws.address)
 
 	ws.wg.Add(1)
@@ -60,8 +82,8 @@ func (ws *TcpClient) GetConnId() string {
 func (ws *TcpClient) Close() {
 
 	if ws.conn != nil {
-		(*ws.conn).Write([]byte(fmt.Sprint("Remote host terminated connection")))
-		(*ws.conn).Close()
+		ws.conn.Write([]byte(fmt.Sprint("Remote host terminated connection")))
+		ws.conn.Close()
 	}
 	close(ws.send)
 	ws.wg.Wait()
@@ -70,7 +92,7 @@ func (ws *TcpClient) Close() {
 func (ws *TcpClient) readSocketBuffer() {
 	go func() {
 		for {
-			reader := bufio.NewReader(*ws.conn)
+			reader := bufio.NewReader(ws.conn)
 			buffer, _, err := reader.ReadLine()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
@@ -95,7 +117,7 @@ func (ws *TcpClient) handle() {
 		select {
 		case <-ws.ctx.Done():
 			fmt.Println("[read] context cancelled, closing WebSocket...")
-			_ = (*ws.conn).Close()
+			_ = ws.conn.Close()
 			return
 
 		case msg, ok := <-ws.socketChan:
@@ -112,7 +134,7 @@ func (ws *TcpClient) handle() {
 				fmt.Println("[write] send channel closed")
 				return
 			}
-			_, err := (*ws.conn).Write(msg)
+			_, err := (ws.conn).Write(msg)
 
 			if err != nil {
 				fmt.Println("[write] error", err)
