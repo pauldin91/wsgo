@@ -9,7 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
-	"strings"
+	"os"
 	"sync"
 )
 
@@ -102,74 +102,50 @@ func (ws *TcpClient) Send(message string) {
 	}
 }
 
-func (ws *TcpClient) handle() {
-	for {
-		select {
-		case <-ws.ctx.Done():
-			fmt.Println("[read] context cancelled, closing WebSocket...")
-			_ = ws.conn.Close()
-			return
-
-		case msg, ok := <-ws.socketChan:
-			if len(msg) > 0 && ok {
-				log.Printf("[read] msg: %s", msg)
-			}
-
-		case err := <-ws.errorChan:
-			fmt.Printf("[read] error: %v", err)
-			return
-
-		case msg, ok := <-ws.send:
-			if !ok {
-				fmt.Println("[write] send channel closed")
-				return
-			}
-			_, err := (ws.conn).Write(msg)
-
-			if err != nil {
-				fmt.Println("[write] error", err)
-				return
-			}
-		}
-	}
+func (ws *TcpClient) SendError(err error) {
+	ws.errorChan <- err
 }
 
-func (ws *TcpClient) readInput(reader *bufio.Reader) {
-
-	go func() {
-		for {
-			input, _, err := reader.ReadLine()
-			if err != nil {
-				ws.errorChan <- err
-				fmt.Println("[console] Read error:", err)
-				return
-			}
-
-			text := strings.TrimSpace(string(input))
-			if text == "exit" {
-				fmt.Println("[console] Exiting by user command.")
-				return
-			}
-			ws.Send(text)
-		}
-	}()
-}
-
-func (ws *TcpClient) ListenForInput(reader *bufio.Reader) {
+func (ws *TcpClient) HandleInputFrom(source *os.File, handler func(*os.File)) {
 	ws.wg.Add(1)
 	go func() {
-		defer ws.wg.Done()
 
-		ws.readInput(reader)
+		defer ws.wg.Done()
+		handler(source)
 		ws.handle()
-
 	}()
 }
-
-func (ws *TcpClient) Input(reader *bufio.Reader, handler func(*bufio.Reader)) {
-	ws.wg.Add(1)
+func (ws *TcpClient) handle() {
 	go func() {
-		defer ws.wg.Done()
-		handler(reader)
+
+		for {
+			select {
+			case <-ws.ctx.Done():
+				fmt.Println("[read] context cancelled, closing WebSocket...")
+				_ = ws.conn.Close()
+				return
+
+			case msg, ok := <-ws.socketChan:
+				if len(msg) > 0 && ok {
+					log.Printf("[read] msg: %s", msg)
+				}
+
+			case err := <-ws.errorChan:
+				fmt.Printf("[read] error: %v", err)
+				return
+
+			case msg, ok := <-ws.send:
+				if !ok {
+					fmt.Println("[write] send channel closed")
+					return
+				}
+				_, err := (ws.conn).Write(msg)
+
+				if err != nil {
+					fmt.Println("[write] error", err)
+					return
+				}
+			}
+		}
 	}()
 }

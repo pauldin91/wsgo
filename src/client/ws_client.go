@@ -1,12 +1,11 @@
 package client
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
-	"strings"
+	"os"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -16,6 +15,7 @@ type WsClient struct {
 	address    string
 	send       chan []byte
 	socketChan chan []byte
+	errorChan  chan error
 	conn       *websocket.Conn
 	wg         *sync.WaitGroup
 	ctx        context.Context
@@ -36,13 +36,6 @@ func NewWsClient(ctx context.Context, address string) *WsClient {
 }
 
 func (ws *WsClient) Connect() {
-	ws.init()
-	if ws.conn != nil {
-		ws.readFromServer()
-	}
-}
-
-func (ws *WsClient) init() {
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -55,6 +48,9 @@ func (ws *WsClient) init() {
 
 	ws.conn = conn
 	log.Printf("connected to server %s", ws.address)
+	if ws.conn != nil {
+		ws.readFromServer()
+	}
 }
 
 func (ws *WsClient) GetConnId() string {
@@ -79,7 +75,7 @@ func (ws *WsClient) readFromServer() {
 
 		errorChan := make(chan error)
 		ws.readSocketBuffer(errorChan)
-		ws.handle(errorChan)
+		ws.handle()
 	}()
 }
 
@@ -102,7 +98,20 @@ func (ws *WsClient) Send(message string) {
 	}
 }
 
-func (ws *WsClient) handle(errorChan chan error) {
+func (ws *WsClient) SendError(err error) {
+	ws.errorChan <- err
+}
+
+func (ws *WsClient) HandleInputFrom(source *os.File, handler func(*os.File)) {
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		handler(source)
+		ws.handle()
+	}()
+}
+
+func (ws *WsClient) handle() {
 	for {
 		select {
 		case <-ws.ctx.Done():
@@ -113,7 +122,7 @@ func (ws *WsClient) handle(errorChan chan error) {
 		case msg := <-ws.socketChan:
 			log.Printf("[read] msg: %s", msg)
 
-		case err := <-errorChan:
+		case err := <-ws.errorChan:
 			log.Printf("[read] error: %v", err)
 			return
 
@@ -129,37 +138,4 @@ func (ws *WsClient) handle(errorChan chan error) {
 			}
 		}
 	}
-}
-
-func (ws *WsClient) readInput(reader *bufio.Reader, errorChan chan error) {
-
-	go func() {
-		for {
-			input, err := reader.ReadString('\n')
-			if err != nil {
-				errorChan <- err
-				fmt.Println("[console] Read error:", err)
-				return
-			}
-
-			text := strings.TrimSpace(input)
-			if text == "exit" {
-				fmt.Println("[console] Exiting by user command.")
-				return
-			}
-			ws.Send(text)
-		}
-	}()
-}
-
-func (ws *WsClient) ListenForInput(reader *bufio.Reader) {
-	ws.wg.Add(1)
-	go func() {
-		defer ws.wg.Done()
-
-		errorChan := make(chan error)
-		ws.readInput(reader, errorChan)
-		ws.handle(errorChan)
-
-	}()
 }

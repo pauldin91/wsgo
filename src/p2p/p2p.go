@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -45,7 +46,25 @@ func (p2p *P2PServer) connectToPeers(peers []string) {
 
 func (p2p *P2PServer) ExposeFirstPeerForInput() {
 	for _, c := range p2p.peers {
-		c.ListenForInput(bufio.NewReader(os.Stdin))
+		source := os.Stdin
+		c.HandleInputFrom(source, func(*os.File) {
+
+			go func() {
+				reader := bufio.NewReader(source)
+				for {
+					input, _, err := reader.ReadLine()
+					if err != nil {
+						c.SendError(err)
+						return
+					}
+					text := strings.TrimSpace(string(input))
+					if text == "exit" {
+						return
+					}
+					c.Send(text)
+				}
+			}()
+		})
 		break
 	}
 }

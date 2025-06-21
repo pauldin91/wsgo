@@ -1,14 +1,14 @@
 package client
 
 import (
-	"bufio"
+	"os"
 )
 
 type Client interface {
 	Close()
 	Connect()
 	GetConnId() string
-	Input(reader *bufio.Reader, handler func(*bufio.Reader))
-	ListenForInput(reader *bufio.Reader)
+	HandleInputFrom(source *os.File, handler func(*os.File))
 	Send(message string)
+	SendError(err error)
 }
