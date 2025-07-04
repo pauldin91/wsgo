@@ -69,7 +69,7 @@ func (p2p *P2PServer) ExposeFirstPeerForInput() {
 	}
 }
 
-func (p2p *P2PServer) Start(peers []string) {
+func (p2p *P2PServer) Start(peers ...string) {
 	p2p.wg.Add(1)
 	go func() {
 		defer p2p.wg.Done()
@@ -80,7 +80,7 @@ func (p2p *P2PServer) Start(peers []string) {
 	p2p.wait()
 }
 
-func (p2p *P2PServer) StartTls(certFile, certKey string, peers []string) {
+func (p2p *P2PServer) StartTls(certFile, certKey string, peers ...string) {
 	p2p.wg.Add(1)
 	go func() {
 		defer p2p.wg.Done()
