@@ -44,10 +44,6 @@ func (p2p *P2PServer) connectToPeers(peers []string) {
 	}
 }
 
-func (p2p *P2PServer) OnPeerConnected(connect func()) {
-
-}
-
 func (p2p *P2PServer) ExposeFirstPeerForInput() {
 	for _, c := range p2p.peers {
 		source := os.Stdin

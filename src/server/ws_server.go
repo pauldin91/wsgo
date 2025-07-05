@@ -11,25 +11,27 @@ import (
 )
 
 type WsServer struct {
-	address string
-	mutex   sync.Mutex
-	sockets map[string]*websocket.Conn
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      *sync.WaitGroup
-	errChan chan error
+	address               string
+	mutex                 sync.Mutex
+	sockets               map[string]*websocket.Conn
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	wg                    *sync.WaitGroup
+	errChan               chan error
+	connectionAddedEvents map[string]chan string
 }
 
 func NewWsServer(ctx context.Context, serveAddress string) WsServer {
 	cotx, cancel := context.WithCancel(ctx)
 	return WsServer{
-		address: serveAddress,
-		ctx:     cotx,
-		cancel:  cancel,
-		sockets: make(map[string]*websocket.Conn),
-		errChan: make(chan error),
-		mutex:   sync.Mutex{},
-		wg:      &sync.WaitGroup{},
+		address:               serveAddress,
+		ctx:                   cotx,
+		cancel:                cancel,
+		sockets:               make(map[string]*websocket.Conn),
+		errChan:               make(chan error),
+		connectionAddedEvents: make(map[string]chan string),
+		mutex:                 sync.Mutex{},
+		wg:                    &sync.WaitGroup{},
 	}
 }
 
@@ -84,6 +86,10 @@ func (ws *WsServer) GetConnections() map[string]*websocket.Conn {
 	return ws.sockets
 }
 
+func (ws *WsServer) GetListener(id string) chan string {
+	return ws.connectionAddedEvents[id]
+}
+
 func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -99,6 +105,8 @@ func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	ws.mutex.Lock()
 	ws.sockets[clientID] = conn
+	ws.connectionAddedEvents[clientID] = make(chan string)
+	ws.connectionAddedEvents[clientID] <- conn.RemoteAddr().String()
 	ws.mutex.Unlock()
 
 	initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
@@ -135,6 +143,7 @@ func (ws *WsServer) closeConnection(clientID string) {
 	ws.mutex.Lock()
 	ws.sockets[clientID].Close()
 	delete(ws.sockets, clientID)
+	delete(ws.connectionAddedEvents, clientID)
 	ws.mutex.Unlock()
 	fmt.Println("Client disconnected:", clientID)
 }
