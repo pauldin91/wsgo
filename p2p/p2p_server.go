@@ -11,22 +11,24 @@ import (
 )
 
 type P2PServer struct {
-	server server.Server
-	peers  map[string]client.Client
-	ctx    context.Context
-	wg     *sync.WaitGroup
+	server   server.Server
+	peers    map[string]client.Client
+	ctx      context.Context
+	wg       *sync.WaitGroup
+	protocol internal.Protocol
 }
 
-func NewP2PServer(ctx context.Context, address string, pr internal.Protocol) P2PServer {
-	return P2PServer{
-		server: server.NewServer(ctx, address, pr),
-		peers:  make(map[string]client.Client),
-		ctx:    ctx,
-		wg:     &sync.WaitGroup{},
+func NewP2PServer(ctx context.Context, address string, pr internal.Protocol) *P2PServer {
+	return &P2PServer{
+		server:   server.NewServer(ctx, address, pr),
+		peers:    make(map[string]client.Client),
+		ctx:      ctx,
+		wg:       &sync.WaitGroup{},
+		protocol: pr,
 	}
 }
 
-func (p2p *P2PServer) Start(peers ...string) {
+func (p2p *P2PServer) Start() {
 	p2p.wg.Add(1)
 	go func() {
 		defer p2p.wg.Done()
@@ -36,15 +38,19 @@ func (p2p *P2PServer) Start(peers ...string) {
 	p2p.wait()
 }
 
+func (p2p *P2PServer) SetOnMsgReceivedHandler(handle func(string)) {
+	p2p.server.OnMessageReceived(handle)
+}
+
 func (p2p *P2PServer) Connect(peers ...string) {
 	for _, p := range peers {
-		client := client.NewWsClient(p2p.ctx, p)
+		client := client.NewClient(p2p.ctx, p, p2p.protocol)
 		client.Connect()
 		p2p.peers[client.GetConnId()] = client
 	}
 }
 
-func (p2p *P2PServer) StartTls(certFile, certKey string) {
+func (p2p *P2PServer) StartTls() {
 	p2p.wg.Add(1)
 	go func() {
 		defer p2p.wg.Done()

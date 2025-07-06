@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/pauldin91/wsgo/src/client"
+	"github.com/pauldin91/wsgo/client"
 )
 
 func main() {
