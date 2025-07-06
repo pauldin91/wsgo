@@ -11,18 +11,21 @@ import (
 )
 
 type WsServer struct {
-	address string
-	mutex   sync.Mutex
-	sockets map[string]*websocket.Conn
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      *sync.WaitGroup
-	errChan chan error
+	address    string
+	mutex      sync.Mutex
+	sockets    map[string]*websocket.Conn
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         *sync.WaitGroup
+	errChan    chan error
+	msgHandler func(string)
+	certFile   string
+	certKey    string
 }
 
-func NewWsServer(ctx context.Context, serveAddress string) WsServer {
+func NewWsServer(ctx context.Context, serveAddress string) *WsServer {
 	cotx, cancel := context.WithCancel(ctx)
-	return WsServer{
+	return &WsServer{
 		address: serveAddress,
 		ctx:     cotx,
 		cancel:  cancel,
@@ -44,12 +47,12 @@ func (ws *WsServer) Start() {
 	ws.waitForSignal()
 }
 
-func (ws *WsServer) StartTls(certFile, certKey string) {
+func (ws *WsServer) StartTls() {
 
 	go func() {
 		http.HandleFunc("/ws", ws.wsHandler)
 		log.Printf("INFO: WS server started on %s\n", ws.address)
-		if err := http.ListenAndServeTLS(ws.address, certFile, certKey, nil); err != nil {
+		if err := http.ListenAndServeTLS(ws.address, ws.certFile, ws.certKey, nil); err != nil {
 			log.Fatal("Could not start WebSocket server:", err)
 		}
 	}()
@@ -72,16 +75,16 @@ func (ws *WsServer) waitForSignal() {
 	}()
 }
 
+func (server *WsServer) OnMessageReceived(handler func(msg string)) {
+	server.msgHandler = handler
+}
+
 func (ws *WsServer) Shutdown() {
 	for _, c := range ws.sockets {
 		c.Close()
 	}
 	close(ws.errChan)
 	ws.wg.Wait()
-}
-
-func (ws *WsServer) GetConnections() map[string]*websocket.Conn {
-	return ws.sockets
 }
 
 func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {

@@ -1,9 +1,9 @@
 package wsgo
 
 import (
-	"github.com/pauldin91/wsgo/src/client"
-	"github.com/pauldin91/wsgo/src/p2p"
-	"github.com/pauldin91/wsgo/src/server"
+	"github.com/pauldin91/wsgo/client"
+	"github.com/pauldin91/wsgo/p2p"
+	"github.com/pauldin91/wsgo/server"
 )
 
 type WsClient = client.WsClient

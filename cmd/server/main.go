@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/pauldin91/wsgo/src/server"
+	"github.com/pauldin91/wsgo/server"
 )
 
 func main() {
