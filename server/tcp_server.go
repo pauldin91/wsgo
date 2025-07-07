@@ -21,13 +21,13 @@ type TcpServer struct {
 	wg          *sync.WaitGroup
 	errChan     chan error
 	listener    *net.Listener
-	msgHandler  func(msg string)
+	msgHandler  func(net.Conn, []byte)
 	config      *tls.Config
 }
 
 func NewTcpServer(ctx context.Context, serveAddress string) *TcpServer {
 	cotx, cancel := context.WithCancel(ctx)
-	return &TcpServer{
+	server := &TcpServer{
 		address:     serveAddress,
 		ctx:         cotx,
 		cancel:      cancel,
@@ -35,55 +35,57 @@ func NewTcpServer(ctx context.Context, serveAddress string) *TcpServer {
 		errChan:     make(chan error),
 		mutex:       sync.Mutex{},
 		wg:          &sync.WaitGroup{},
-		msgHandler:  func(string) {},
+		msgHandler:  func(net.Conn, []byte) {},
 	}
+
+	return server
 }
 
-func (ws *TcpServer) Start() {
+func (server *TcpServer) Start() {
 
-	log.Printf("INFO: WS server started on %s\n", ws.address)
-	listener, err := net.Listen("tcp", ws.address)
-	ws.listener = &listener
+	log.Printf("INFO: WS server started on %s\n", server.address)
+	listener, err := net.Listen("tcp", server.address)
+	server.listener = &listener
 	go func() {
-		ws.listenForConnections()
+		server.listenForConnections()
 	}()
 	if err != nil {
 		log.Fatal("Could not start Tcp server:", err)
 	}
-	ws.waitForSignal()
+	server.waitForSignal()
 
 }
 
-func (ws *TcpServer) StartTls() {
+func (server *TcpServer) StartTls() {
 	// cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
 	// config := &tls.Config{Certificates: []tls.Certificate{cert}}
-	log.Printf("INFO: WS server started on %s\n", ws.address)
-	listener, err := tls.Listen("tcp", ws.address, ws.config)
-	ws.listener = &listener
-	ws.listenForConnections()
+	log.Printf("INFO: WS server started on %s\n", server.address)
+	listener, err := tls.Listen("tcp", server.address, server.config)
+	server.listener = &listener
+	server.listenForConnections()
 	if err != nil {
 		log.Fatal("Could not start Tcp server:", err)
 	}
-	ws.waitForSignal()
+	server.waitForSignal()
 
 }
 
-func (server *TcpServer) OnMessageReceived(handler func(msg string)) {
+func (server *TcpServer) OnMessageReceived(handler func(conn net.Conn, msg []byte)) {
 	server.msgHandler = handler
 }
 
-func (ws *TcpServer) waitForSignal() {
+func (server *TcpServer) waitForSignal() {
 	go func() {
 		for {
 			select {
-			case <-ws.ctx.Done():
+			case <-server.ctx.Done():
 				log.Println("[server] caught interrupt signal")
-				ws.cancel()
+				server.cancel()
 				return
-			case err := <-ws.errChan:
+			case err := <-server.errChan:
 				log.Printf("error : %s\n", err)
 				return
 			}
@@ -91,40 +93,40 @@ func (ws *TcpServer) waitForSignal() {
 	}()
 }
 
-func (srv *TcpServer) Shutdown() {
-	for _, c := range srv.connections {
+func (server *TcpServer) Shutdown() {
+	for _, c := range server.connections {
 		c.Close()
 	}
-	close(srv.errChan)
-	srv.wg.Wait()
+	close(server.errChan)
+	server.wg.Wait()
 }
 
-func (ws *TcpServer) closeConnection(clientID string) {
-	ws.mutex.Lock()
-	ws.connections[clientID].Close()
-	delete(ws.connections, clientID)
-	ws.mutex.Unlock()
+func (server *TcpServer) closeConnection(clientID string) {
+	server.mutex.Lock()
+	server.connections[clientID].Close()
+	delete(server.connections, clientID)
+	server.mutex.Unlock()
 	fmt.Println("Client disconnected:", clientID)
 }
 
-func (ws *TcpServer) listenForConnections() {
+func (server *TcpServer) listenForConnections() {
 	go func() {
 
 		for {
-			conn, err := (*ws.listener).Accept()
+			conn, err := (*server.listener).Accept()
 			if err != nil {
 				fmt.Println("could not estblish connection")
 			}
 			clientID := fmt.Sprintf("%p", conn)
 
-			ws.mutex.Lock()
-			ws.connections[clientID] = conn
-			ws.mutex.Unlock()
+			server.mutex.Lock()
+			server.connections[clientID] = conn
+			server.mutex.Unlock()
 
 			initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
 			log.Print(initialMsg)
-			ws.wg.Add(1)
-			go ws.handleConnection(clientID)
+			server.wg.Add(1)
+			go server.handleConnection(clientID)
 		}
 	}()
 }
@@ -144,6 +146,6 @@ func (server *TcpServer) handleConnection(clientID string) {
 			log.Printf("Error on clients [%s] connection : %v", clientID, err)
 			break
 		}
-		server.msgHandler(string(buffer))
+		server.msgHandler(server.connections[clientID], buffer)
 	}
 }

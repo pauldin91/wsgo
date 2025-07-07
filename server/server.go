@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"net"
 
 	"github.com/pauldin91/wsgo/internal"
 )
@@ -9,7 +10,7 @@ import (
 type Server interface {
 	Start()
 	StartTls()
-	OnMessageReceived(handler func(msg string))
+	OnMessageReceived(handler func(net.Conn, []byte))
 	Shutdown()
 }
 

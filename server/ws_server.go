@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 
@@ -18,7 +19,7 @@ type WsServer struct {
 	cancel     context.CancelFunc
 	wg         *sync.WaitGroup
 	errChan    chan error
-	msgHandler func(string)
+	msgHandler func(net.Conn, []byte)
 	certFile   string
 	certKey    string
 }
@@ -75,7 +76,7 @@ func (ws *WsServer) waitForSignal() {
 	}()
 }
 
-func (server *WsServer) OnMessageReceived(handler func(msg string)) {
+func (server *WsServer) OnMessageReceived(handler func(net.Conn, []byte)) {
 	server.msgHandler = handler
 }
 

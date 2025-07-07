@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +23,9 @@ func main() {
 	log.Printf("[main] starting TCP server on %s", *host)
 	server := server.NewTcpServer(ctx, *host)
 	server.Start()
+	server.OnMessageReceived(func(conn net.Conn, msg []byte) {
+		conn.Write([]byte(string(msg) + "\n"))
+	})
 
 	// p, _ := os.FindProcess(os.Getpid())
 	// p.Signal(syscall.SIGTERM)

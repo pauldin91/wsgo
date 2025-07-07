@@ -115,6 +115,7 @@ func (ws *TcpClient) HandleInputFrom(source *os.File, handler func(*os.File)) {
 		ws.handle()
 	}()
 }
+
 func (ws *TcpClient) handle() {
 	go func() {
 
