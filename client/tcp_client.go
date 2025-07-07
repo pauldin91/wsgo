@@ -25,11 +25,10 @@ type TcpClient struct {
 }
 
 func NewTcpClient(ctx context.Context, address string) *TcpClient {
-	context := context.WithoutCancel(ctx)
 	var ws = &TcpClient{
 		wg:         &sync.WaitGroup{},
 		address:    address,
-		ctx:        context,
+		ctx:        ctx,
 		send:       make(chan []byte),
 		socketChan: make(chan []byte),
 		errorChan:  make(chan error),
@@ -72,7 +71,7 @@ func (ws *TcpClient) GetConnId() string {
 func (ws *TcpClient) Close() {
 
 	if ws.conn != nil {
-		ws.conn.Write([]byte(fmt.Sprint("Remote host terminated connection")))
+		ws.conn.Write([]byte("Remote host terminated connection"))
 		ws.conn.Close()
 	}
 	close(ws.send)

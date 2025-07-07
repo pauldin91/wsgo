@@ -17,7 +17,6 @@ type TcpServer struct {
 	mutex       sync.Mutex
 	connections map[string]net.Conn
 	ctx         context.Context
-	cancel      context.CancelFunc
 	wg          *sync.WaitGroup
 	errChan     chan error
 	listener    *net.Listener
@@ -26,11 +25,9 @@ type TcpServer struct {
 }
 
 func NewTcpServer(ctx context.Context, serveAddress string) *TcpServer {
-	cotx, cancel := context.WithCancel(ctx)
 	server := &TcpServer{
 		address:     serveAddress,
-		ctx:         cotx,
-		cancel:      cancel,
+		ctx:         ctx,
 		connections: make(map[string]net.Conn),
 		errChan:     make(chan error),
 		mutex:       sync.Mutex{},
@@ -83,7 +80,6 @@ func (server *TcpServer) waitForSignal() {
 			select {
 			case <-server.ctx.Done():
 				log.Println("[server] caught interrupt signal")
-				server.cancel()
 				return
 			case err := <-server.errChan:
 				log.Printf("error : %s\n", err)

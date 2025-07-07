@@ -16,7 +16,6 @@ type WsServer struct {
 	mutex      sync.Mutex
 	sockets    map[string]*websocket.Conn
 	ctx        context.Context
-	cancel     context.CancelFunc
 	wg         *sync.WaitGroup
 	errChan    chan error
 	msgHandler func(net.Conn, []byte)
@@ -25,11 +24,9 @@ type WsServer struct {
 }
 
 func NewWsServer(ctx context.Context, serveAddress string) *WsServer {
-	cotx, cancel := context.WithCancel(ctx)
 	return &WsServer{
 		address: serveAddress,
-		ctx:     cotx,
-		cancel:  cancel,
+		ctx:     ctx,
 		sockets: make(map[string]*websocket.Conn),
 		errChan: make(chan error),
 		mutex:   sync.Mutex{},
@@ -66,7 +63,6 @@ func (ws *WsServer) waitForSignal() {
 			select {
 			case <-ws.ctx.Done():
 				log.Println("[server] caught interrupt signal")
-				ws.cancel()
 				return
 			case err := <-ws.errChan:
 				log.Printf("error : %s\n", err)

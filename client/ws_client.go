@@ -19,16 +19,13 @@ type WsClient struct {
 	conn       *websocket.Conn
 	wg         *sync.WaitGroup
 	ctx        context.Context
-	cnl        context.CancelFunc
 }
 
 func NewWsClient(ctx context.Context, address string) *WsClient {
-	context, cancel := context.WithCancel(ctx)
 	var ws = &WsClient{
 		wg:         &sync.WaitGroup{},
 		address:    address,
-		ctx:        context,
-		cnl:        cancel,
+		ctx:        ctx,
 		send:       make(chan []byte),
 		socketChan: make(chan []byte),
 	}
