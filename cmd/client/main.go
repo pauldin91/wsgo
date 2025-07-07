@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -24,10 +25,10 @@ func main() {
 
 	client := client.NewTcpClient(ctx, *host)
 	client.Connect()
-	client.HandleInputFrom(os.Stdin, func(src *os.File) {
+	client.OnMessageParseHandler(func(conn net.Conn) {
 
 		go func() {
-			reader := bufio.NewReader(src)
+			reader := bufio.NewReader(os.Stdin)
 			for {
 				input, _, err := reader.ReadLine()
 				if err != nil {
@@ -38,7 +39,7 @@ func main() {
 				if text == "exit" {
 					return
 				}
-				client.Send(text)
+				conn.Write([]byte(text))
 			}
 		}()
 	})

@@ -5,31 +5,39 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
-	"os"
+	"net"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 type WsClient struct {
-	address    string
-	send       chan []byte
-	socketChan chan []byte
-	errorChan  chan error
-	conn       *websocket.Conn
-	wg         *sync.WaitGroup
-	ctx        context.Context
+	address            string
+	errorChan          chan error
+	conn               *websocket.Conn
+	wg                 *sync.WaitGroup
+	ctx                context.Context
+	incomingMsgHandler func([]byte)
+	outgoingMsgHandler func(net.Conn)
 }
 
 func NewWsClient(ctx context.Context, address string) *WsClient {
 	var ws = &WsClient{
-		wg:         &sync.WaitGroup{},
-		address:    address,
-		ctx:        ctx,
-		send:       make(chan []byte),
-		socketChan: make(chan []byte),
+		wg:                 &sync.WaitGroup{},
+		address:            address,
+		ctx:                ctx,
+		incomingMsgHandler: func(b []byte) {},
+		outgoingMsgHandler: func(c net.Conn) {},
 	}
 	return ws
+}
+
+func (ws *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
+	ws.incomingMsgHandler = handler
+}
+
+func (ws *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
+	ws.outgoingMsgHandler = handler
 }
 
 func (ws *WsClient) Connect() {
@@ -61,7 +69,6 @@ func (ws *WsClient) Close() {
 		ws.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		ws.conn.Close()
 	}
-	close(ws.send)
 	ws.wg.Wait()
 }
 
@@ -70,40 +77,33 @@ func (ws *WsClient) readFromServer() {
 	go func() {
 		defer ws.wg.Done()
 
-		errorChan := make(chan error)
-		ws.readSocketBuffer(errorChan)
+		ws.readSocketBuffer()
 		ws.handle()
 	}()
 }
 
-func (ws *WsClient) readSocketBuffer(errorChan chan error) {
+func (ws *WsClient) readSocketBuffer() {
 	go func() {
 		for {
 			_, message, err := ws.conn.ReadMessage()
 			if err != nil {
-				errorChan <- err
+				ws.errorChan <- err
 				return
 			}
-			ws.socketChan <- message
+			ws.incomingMsgHandler(message)
 		}
 	}()
-}
-
-func (ws *WsClient) Send(message string) {
-	if ws.conn != nil {
-		ws.send <- []byte(message)
-	}
 }
 
 func (ws *WsClient) SendError(err error) {
 	ws.errorChan <- err
 }
 
-func (ws *WsClient) HandleInputFrom(source *os.File, handler func(*os.File)) {
+func (ws *WsClient) HandleInputFrom(handler func()) {
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
-		handler(source)
+		handler()
 		ws.handle()
 	}()
 }
@@ -116,23 +116,10 @@ func (ws *WsClient) handle() {
 			_ = ws.conn.Close()
 			return
 
-		case msg := <-ws.socketChan:
-			log.Printf("[read] msg: %s", msg)
-
 		case err := <-ws.errorChan:
 			log.Printf("[read] error: %v", err)
 			return
 
-		case msg, ok := <-ws.send:
-			if !ok {
-				log.Println("[write] send channel closed")
-				return
-			}
-			err := ws.conn.WriteMessage(websocket.TextMessage, msg)
-			if err != nil {
-				log.Println("[write] error", err)
-				return
-			}
 		}
 	}
 }

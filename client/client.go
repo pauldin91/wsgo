@@ -2,7 +2,7 @@ package client
 
 import (
 	"context"
-	"os"
+	"net"
 
 	"github.com/pauldin91/wsgo/internal"
 )
@@ -11,8 +11,8 @@ type Client interface {
 	Close()
 	Connect()
 	GetConnId() string
-	HandleInputFrom(source *os.File, handler func(*os.File))
-	Send(message string)
+	OnMessageReceivedHandler(func([]byte))
+	OnMessageParseHandler(func(net.Conn))
 	SendError(err error)
 }
 

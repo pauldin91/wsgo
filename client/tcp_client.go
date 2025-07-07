@@ -9,31 +9,38 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 	"sync"
 )
 
 type TcpClient struct {
-	address    string
-	send       chan []byte
-	socketChan chan []byte
-	errorChan  chan error
-	conn       net.Conn
-	wg         *sync.WaitGroup
-	ctx        context.Context
-	tlsConf    *tls.Config
+	address            string
+	errorChan          chan error
+	conn               net.Conn
+	wg                 *sync.WaitGroup
+	ctx                context.Context
+	tlsConf            *tls.Config
+	msgReceivedHandler func([]byte)
+	msgParseHandler    func(net.Conn)
 }
 
 func NewTcpClient(ctx context.Context, address string) *TcpClient {
 	var ws = &TcpClient{
-		wg:         &sync.WaitGroup{},
-		address:    address,
-		ctx:        ctx,
-		send:       make(chan []byte),
-		socketChan: make(chan []byte),
-		errorChan:  make(chan error),
+		wg:                 &sync.WaitGroup{},
+		address:            address,
+		ctx:                ctx,
+		errorChan:          make(chan error),
+		msgReceivedHandler: func(b []byte) {},
+		msgParseHandler:    func(c net.Conn) {},
 	}
 	return ws
+}
+
+func (ws *TcpClient) OnMessageReceivedHandler(handler func([]byte)) {
+	ws.msgReceivedHandler = handler
+}
+
+func (ws *TcpClient) OnMessageParseHandler(handler func(net.Conn)) {
+	ws.msgParseHandler = handler
 }
 
 func (ws *TcpClient) Connect() {
@@ -74,7 +81,6 @@ func (ws *TcpClient) Close() {
 		ws.conn.Write([]byte("Remote host terminated connection"))
 		ws.conn.Close()
 	}
-	close(ws.send)
 	ws.wg.Wait()
 }
 
@@ -90,29 +96,13 @@ func (ws *TcpClient) readSocketBuffer() {
 				ws.errorChan <- err
 				return
 			}
-			ws.socketChan <- buffer
+			ws.msgReceivedHandler(buffer)
 		}
 	}()
 }
 
-func (ws *TcpClient) Send(message string) {
-	if ws.conn != nil {
-		ws.send <- []byte(message + "\n")
-	}
-}
-
 func (ws *TcpClient) SendError(err error) {
 	ws.errorChan <- err
-}
-
-func (ws *TcpClient) HandleInputFrom(source *os.File, handler func(*os.File)) {
-	ws.wg.Add(1)
-	go func() {
-
-		defer ws.wg.Done()
-		handler(source)
-		ws.handle()
-	}()
 }
 
 func (ws *TcpClient) handle() {
@@ -125,26 +115,9 @@ func (ws *TcpClient) handle() {
 				_ = ws.conn.Close()
 				return
 
-			case msg, ok := <-ws.socketChan:
-				if len(msg) > 0 && ok {
-					log.Printf("[read] msg: %s", msg)
-				}
-
 			case err := <-ws.errorChan:
 				fmt.Printf("[read] error: %v", err)
 				return
-
-			case msg, ok := <-ws.send:
-				if !ok {
-					fmt.Println("[write] send channel closed")
-					return
-				}
-				_, err := (ws.conn).Write(msg)
-
-				if err != nil {
-					fmt.Println("[write] error", err)
-					return
-				}
 			}
 		}
 	}()
