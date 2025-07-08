@@ -8,8 +8,8 @@ import (
 )
 
 type Server interface {
-	Start()
-	StartTls()
+	Start() error
+	StartTls() error
 	OnMessageReceived(handler func(net.Conn, []byte))
 	Shutdown()
 }

@@ -5,9 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 )
@@ -38,35 +36,28 @@ func NewTcpServer(ctx context.Context, serveAddress string) *TcpServer {
 	return server
 }
 
-func (server *TcpServer) Start() {
+func (server *TcpServer) Start() error {
 
-	log.Printf("INFO: WS server started on %s\n", server.address)
 	listener, err := net.Listen("tcp", server.address)
-	server.listener = &listener
-	go func() {
-		server.listenForConnections()
-	}()
 	if err != nil {
-		log.Fatal("Could not start Tcp server:", err)
+		return err
 	}
+	server.listener = &listener
+	server.listenForConnections()
 	server.waitForSignal()
+	return nil
 
 }
 
-func (server *TcpServer) StartTls() {
-	// cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// config := &tls.Config{Certificates: []tls.Certificate{cert}}
-	log.Printf("INFO: WS server started on %s\n", server.address)
+func (server *TcpServer) StartTls() error {
 	listener, err := tls.Listen("tcp", server.address, server.config)
+	if err != nil {
+		return err
+	}
 	server.listener = &listener
 	server.listenForConnections()
-	if err != nil {
-		log.Fatal("Could not start Tcp server:", err)
-	}
 	server.waitForSignal()
+	return nil
 
 }
 
@@ -79,10 +70,8 @@ func (server *TcpServer) waitForSignal() {
 		for {
 			select {
 			case <-server.ctx.Done():
-				log.Println("[server] caught interrupt signal")
 				return
-			case err := <-server.errChan:
-				log.Printf("error : %s\n", err)
+			case <-server.errChan:
 				return
 			}
 		}
@@ -102,25 +91,20 @@ func (server *TcpServer) closeConnection(clientID string) {
 	server.connections[clientID].Close()
 	delete(server.connections, clientID)
 	server.mutex.Unlock()
-	fmt.Println("Client disconnected:", clientID)
 }
 
 func (server *TcpServer) listenForConnections() {
 	go func() {
-
 		for {
 			conn, err := (*server.listener).Accept()
 			if err != nil {
-				fmt.Println("could not estblish connection")
+				server.errChan <- err
+				return
 			}
-			clientID := fmt.Sprintf("%p", conn)
-
+			clientID := conn.RemoteAddr().String()
 			server.mutex.Lock()
 			server.connections[clientID] = conn
 			server.mutex.Unlock()
-
-			initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
-			log.Print(initialMsg)
 			server.wg.Add(1)
 			go server.handleConnection(clientID)
 		}
@@ -139,7 +123,7 @@ func (server *TcpServer) handleConnection(clientID string) {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				break
 			}
-			log.Printf("Error on clients [%s] connection : %v", clientID, err)
+			server.errChan <- err
 			break
 		}
 		server.msgHandler(server.connections[clientID], buffer)

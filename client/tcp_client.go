@@ -43,7 +43,7 @@ func (ws *TcpClient) OnMessageParseHandler(handler func(net.Conn)) {
 	ws.msgParseHandler = handler
 }
 
-func (ws *TcpClient) Connect() {
+func (ws *TcpClient) Connect() error {
 	var conn net.Conn
 	var err error
 
@@ -55,8 +55,7 @@ func (ws *TcpClient) Connect() {
 	}
 
 	if err != nil {
-		log.Printf("connection error :%s\n", err)
-		return
+		return err
 	}
 	ws.conn = conn
 
@@ -68,6 +67,8 @@ func (ws *TcpClient) Connect() {
 		ws.readSocketBuffer()
 		ws.handle()
 	}()
+
+	return nil
 }
 
 func (ws *TcpClient) GetConnId() string {
@@ -111,12 +112,10 @@ func (ws *TcpClient) handle() {
 		for {
 			select {
 			case <-ws.ctx.Done():
-				fmt.Println("[read] context cancelled, closing WebSocket...")
 				_ = ws.conn.Close()
 				return
 
-			case err := <-ws.errorChan:
-				fmt.Printf("[read] error: %v", err)
+			case <-ws.errorChan:
 				return
 			}
 		}

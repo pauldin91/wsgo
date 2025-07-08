@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -12,49 +10,55 @@ import (
 )
 
 type WsServer struct {
-	address    string
-	mutex      sync.Mutex
-	sockets    map[string]*websocket.Conn
-	ctx        context.Context
-	wg         *sync.WaitGroup
-	errChan    chan error
-	msgHandler func(net.Conn, []byte)
-	certFile   string
-	certKey    string
+	address      string
+	mutex        sync.Mutex
+	sockets      map[string]*websocket.Conn
+	ctx          context.Context
+	wg           *sync.WaitGroup
+	errChan      chan error
+	msgHandler   func(net.Conn, []byte)
+	wsMsgHandler func(*websocket.Conn, []byte)
+	certFile     string
+	certKey      string
 }
 
 func NewWsServer(ctx context.Context, serveAddress string) *WsServer {
 	return &WsServer{
-		address: serveAddress,
-		ctx:     ctx,
-		sockets: make(map[string]*websocket.Conn),
-		errChan: make(chan error),
-		mutex:   sync.Mutex{},
-		wg:      &sync.WaitGroup{},
+		address:      serveAddress,
+		ctx:          ctx,
+		sockets:      make(map[string]*websocket.Conn),
+		errChan:      make(chan error),
+		mutex:        sync.Mutex{},
+		wg:           &sync.WaitGroup{},
+		msgHandler:   func(c net.Conn, b []byte) {},
+		wsMsgHandler: func(c *websocket.Conn, b []byte) {},
 	}
 }
 
-func (ws *WsServer) Start() {
+func (ws *WsServer) Start() error {
+	http.HandleFunc("/ws", ws.wsHandler)
 	go func() {
-		http.HandleFunc("/ws", ws.wsHandler)
-		log.Printf("INFO: WS server started on %s\n", ws.address)
+
 		if err := http.ListenAndServe(ws.address, nil); err != nil {
-			log.Fatal("Could not start WebSocket server:", err)
+			ws.errChan <- err
 		}
 	}()
+
 	ws.waitForSignal()
+	return nil
 }
 
-func (ws *WsServer) StartTls() {
+func (ws *WsServer) StartTls() error {
 
+	http.HandleFunc("/ws", ws.wsHandler)
 	go func() {
-		http.HandleFunc("/ws", ws.wsHandler)
-		log.Printf("INFO: WS server started on %s\n", ws.address)
+
 		if err := http.ListenAndServeTLS(ws.address, ws.certFile, ws.certKey, nil); err != nil {
-			log.Fatal("Could not start WebSocket server:", err)
+			ws.errChan <- err
 		}
 	}()
 	ws.waitForSignal()
+	return nil
 }
 
 func (ws *WsServer) waitForSignal() {
@@ -62,14 +66,16 @@ func (ws *WsServer) waitForSignal() {
 		for {
 			select {
 			case <-ws.ctx.Done():
-				log.Println("[server] caught interrupt signal")
 				return
-			case err := <-ws.errChan:
-				log.Printf("error : %s\n", err)
+			case <-ws.errChan:
 				return
 			}
 		}
 	}()
+}
+
+func (server *WsServer) OnWsMessageReceived(handler func(*websocket.Conn, []byte)) {
+	server.wsMsgHandler = handler
 }
 
 func (server *WsServer) OnMessageReceived(handler func(net.Conn, []byte)) {
@@ -92,42 +98,27 @@ func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, "Failed to upgrade connection", http.StatusBadRequest)
+		ws.errChan <- err
 		return
 	}
-	clientID := fmt.Sprintf("%p", conn)
+	clientID := conn.RemoteAddr().String()
 
 	ws.mutex.Lock()
 	ws.sockets[clientID] = conn
 	ws.mutex.Unlock()
+	ws.handleConnection(ws.sockets[clientID])
+}
 
-	initialMsg := fmt.Sprintf("New client connected with id : %s\n", clientID)
-
-	log.Print(initialMsg)
-
-	defer ws.closeConnection(clientID)
+func (ws *WsServer) handleConnection(conn *websocket.Conn) {
+	defer ws.closeConnection(conn.RemoteAddr().String())
 
 	for {
 		_, p, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
-		msg := fmt.Sprintf("[client] %s says : %s\n", clientID, string(p))
-		ws.broadcastMessage(msg)
-		log.Printf("[client] %s: says %s\n", clientID, string(p))
-	}
-}
-
-func (ws *WsServer) broadcastMessage(message string) {
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-
-	for clientID, conn := range ws.sockets {
-		if err := conn.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
-			log.Println("Error writing to client", clientID, ":", err)
-			conn.Close()
-			delete(ws.sockets, clientID)
-		}
+		ws.wsMsgHandler(conn, p)
+		// con := ws.sockets[conn.RemoteAddr().String()].NetConn()
 	}
 }
 
@@ -136,5 +127,4 @@ func (ws *WsServer) closeConnection(clientID string) {
 	ws.sockets[clientID].Close()
 	delete(ws.sockets, clientID)
 	ws.mutex.Unlock()
-	fmt.Println("Client disconnected:", clientID)
 }

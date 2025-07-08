@@ -40,15 +40,14 @@ func (ws *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
 	ws.outgoingMsgHandler = handler
 }
 
-func (ws *WsClient) Connect() {
+func (ws *WsClient) Connect() error {
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	conn, _, err := dialer.Dial(ws.address, nil)
 	if err != nil {
-		log.Printf("connection error :%s\n", err)
-		return
+		return err
 	}
 
 	ws.conn = conn
@@ -56,6 +55,7 @@ func (ws *WsClient) Connect() {
 	if ws.conn != nil {
 		ws.readFromServer()
 	}
+	return nil
 }
 
 func (ws *WsClient) GetConnId() string {
@@ -112,12 +112,10 @@ func (ws *WsClient) handle() {
 	for {
 		select {
 		case <-ws.ctx.Done():
-			log.Println("[read] context cancelled, closing WebSocket...")
 			_ = ws.conn.Close()
 			return
 
-		case err := <-ws.errorChan:
-			log.Printf("[read] error: %v", err)
+		case <-ws.errorChan:
 			return
 
 		}

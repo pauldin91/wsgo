@@ -9,7 +9,7 @@ import (
 
 type Client interface {
 	Close()
-	Connect()
+	Connect() error
 	GetConnId() string
 	OnMessageReceivedHandler(func([]byte))
 	OnMessageParseHandler(func(net.Conn))
