@@ -1,11 +1,11 @@
-version: '3.8'
+version: "3.8"
 
 services:
   tcp.server:
     init: true
     build:
       context: .
-      dockerfile: src/docker/raw.server.dockerfile
+      dockerfile: ./raw.server.dockerfile
     ports:
       - "4443:4443"
     environment:
@@ -16,13 +16,13 @@ services:
   ws.server:
     build:
       context: .
-      dockerfile: src/docker/ws.server.dockerfile
+      dockerfile: ./ws.server.dockerfile
     ports:
       - "6443:6443"
     environment:
       - host=:6443
     networks:
-      - wsgo   
+      - wsgo
 
 networks:
   wsgo:
