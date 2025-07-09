@@ -43,7 +43,7 @@ func (p2p *P2PServer) Start() {
 	p2p.wait()
 }
 
-func (p2p *P2PServer) SetPongHandler(handle func([]byte)) {
+func (p2p *P2PServer) SetMsgReceivedHandler(handle func([]byte)) {
 	p2p.server.OnMessageReceived(handle)
 }
 

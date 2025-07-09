@@ -17,7 +17,7 @@ func main() {
 
 	p2pServer := p2p.NewP2PServer(ctx, "localhost:6446", internal.TCP)
 	p2pServer.Start()
-	p2pServer.SetPongHandler(func(b []byte) {
+	p2pServer.SetMsgReceivedHandler(func(b []byte) {
 		fmt.Printf("%s", []byte("Echo: "+string(b)+"\n"))
 	})
 	<-ctx.Done()
