@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gorilla/websocket"
 	"github.com/pauldin91/wsgo/server"
 )
 
@@ -24,12 +23,9 @@ func main() {
 	log.Printf("[main] starting TCP server on %s", *host)
 	server := server.NewWsServer(ctx, *host)
 	server.Start()
-	server.OnWsMessageReceived(func(conn *websocket.Conn, msg []byte) {
-		conn.WriteMessage(websocket.PingMessage, []byte(string(msg)+"\n"))
-		conn.SetPongHandler(func(appData string) error {
-			fmt.Printf("Received: %s\n", appData)
-			return nil
-		})
+	server.OnMessageReceived(func(msg []byte) {
+
+		fmt.Printf("Received: %s\n", string(msg))
 	})
 
 	// p, _ := os.FindProcess(os.Getpid())

@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"net"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,8 +17,8 @@ func main() {
 
 	p2pServer := p2p.NewP2PServer(ctx, "localhost:6446", internal.TCP)
 	p2pServer.Start()
-	p2pServer.SetOnMsgReceivedHandler(func(c net.Conn, b []byte) {
-		c.Write([]byte("Echo: " + string(b) + "\n"))
+	p2pServer.SetPongHandler(func(b []byte) {
+		fmt.Printf("%s", []byte("Echo: "+string(b)+"\n"))
 	})
 	<-ctx.Done()
 	p2pServer.Shutdown()

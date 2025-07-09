@@ -2,8 +2,6 @@ package p2p
 
 import (
 	"context"
-	"log"
-	"net"
 	"sync"
 
 	"github.com/pauldin91/wsgo/client"
@@ -17,6 +15,7 @@ type P2PServer struct {
 	ctx      context.Context
 	wg       *sync.WaitGroup
 	protocol internal.Protocol
+	errChan  chan error
 }
 
 func NewP2PServer(ctx context.Context, address string, pr internal.Protocol) *P2PServer {
@@ -26,6 +25,7 @@ func NewP2PServer(ctx context.Context, address string, pr internal.Protocol) *P2
 		ctx:      ctx,
 		wg:       &sync.WaitGroup{},
 		protocol: pr,
+		errChan:  make(chan error),
 	}
 }
 
@@ -33,13 +33,17 @@ func (p2p *P2PServer) Start() {
 	p2p.wg.Add(1)
 	go func() {
 		defer p2p.wg.Done()
-		p2p.server.Start()
+		err := p2p.server.Start()
+		if err != nil {
+			p2p.errChan <- err
+			return
+		}
 	}()
 
 	p2p.wait()
 }
 
-func (p2p *P2PServer) SetOnMsgReceivedHandler(handle func(net.Conn, []byte)) {
+func (p2p *P2PServer) SetPongHandler(handle func([]byte)) {
 	p2p.server.OnMessageReceived(handle)
 }
 
@@ -55,7 +59,11 @@ func (p2p *P2PServer) StartTls() {
 	p2p.wg.Add(1)
 	go func() {
 		defer p2p.wg.Done()
-		p2p.server.StartTls()
+		err := p2p.server.StartTls()
+		if err != nil {
+			p2p.errChan <- err
+			return
+		}
 	}()
 
 	p2p.wait()
@@ -65,8 +73,9 @@ func (p2p *P2PServer) wait() {
 	go func() {
 		for {
 			select {
+			case <-p2p.errChan:
+				return
 			case <-p2p.ctx.Done():
-				log.Println("[p2p]:Interrupt received. Exiting ...")
 				return
 			}
 		}

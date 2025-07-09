@@ -18,7 +18,7 @@ type TcpServer struct {
 	wg          *sync.WaitGroup
 	errChan     chan error
 	listener    *net.Listener
-	msgHandler  func(net.Conn, []byte)
+	msgHandler  func([]byte)
 	config      *tls.Config
 }
 
@@ -30,7 +30,7 @@ func NewTcpServer(ctx context.Context, serveAddress string) *TcpServer {
 		errChan:     make(chan error),
 		mutex:       sync.Mutex{},
 		wg:          &sync.WaitGroup{},
-		msgHandler:  func(net.Conn, []byte) {},
+		msgHandler:  func([]byte) {},
 	}
 
 	return server
@@ -61,21 +61,8 @@ func (server *TcpServer) StartTls() error {
 
 }
 
-func (server *TcpServer) OnMessageReceived(handler func(conn net.Conn, msg []byte)) {
+func (server *TcpServer) OnMessageReceived(handler func(msg []byte)) {
 	server.msgHandler = handler
-}
-
-func (server *TcpServer) waitForSignal() {
-	go func() {
-		for {
-			select {
-			case <-server.ctx.Done():
-				return
-			case <-server.errChan:
-				return
-			}
-		}
-	}()
 }
 
 func (server *TcpServer) Shutdown() {
@@ -126,6 +113,19 @@ func (server *TcpServer) handleConnection(clientID string) {
 			server.errChan <- err
 			break
 		}
-		server.msgHandler(server.connections[clientID], buffer)
+		server.msgHandler(buffer)
 	}
+}
+
+func (server *TcpServer) waitForSignal() {
+	go func() {
+		for {
+			select {
+			case <-server.ctx.Done():
+				return
+			case <-server.errChan:
+				return
+			}
+		}
+	}()
 }

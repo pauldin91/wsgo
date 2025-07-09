@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"sync"
 
@@ -10,28 +9,26 @@ import (
 )
 
 type WsServer struct {
-	address      string
-	mutex        sync.Mutex
-	sockets      map[string]*websocket.Conn
-	ctx          context.Context
-	wg           *sync.WaitGroup
-	errChan      chan error
-	msgHandler   func(net.Conn, []byte)
-	wsMsgHandler func(*websocket.Conn, []byte)
-	certFile     string
-	certKey      string
+	address    string
+	mutex      sync.Mutex
+	sockets    map[string]*websocket.Conn
+	ctx        context.Context
+	wg         *sync.WaitGroup
+	errChan    chan error
+	msgHandler func([]byte)
+	certFile   string
+	certKey    string
 }
 
 func NewWsServer(ctx context.Context, serveAddress string) *WsServer {
 	return &WsServer{
-		address:      serveAddress,
-		ctx:          ctx,
-		sockets:      make(map[string]*websocket.Conn),
-		errChan:      make(chan error),
-		mutex:        sync.Mutex{},
-		wg:           &sync.WaitGroup{},
-		msgHandler:   func(c net.Conn, b []byte) {},
-		wsMsgHandler: func(c *websocket.Conn, b []byte) {},
+		address:    serveAddress,
+		ctx:        ctx,
+		sockets:    make(map[string]*websocket.Conn),
+		errChan:    make(chan error),
+		mutex:      sync.Mutex{},
+		wg:         &sync.WaitGroup{},
+		msgHandler: func(b []byte) {},
 	}
 }
 
@@ -74,11 +71,7 @@ func (ws *WsServer) waitForSignal() {
 	}()
 }
 
-func (server *WsServer) OnWsMessageReceived(handler func(*websocket.Conn, []byte)) {
-	server.wsMsgHandler = handler
-}
-
-func (server *WsServer) OnMessageReceived(handler func(net.Conn, []byte)) {
+func (server *WsServer) OnMessageReceived(handler func([]byte)) {
 	server.msgHandler = handler
 }
 
@@ -117,7 +110,7 @@ func (ws *WsServer) handleConnection(conn *websocket.Conn) {
 		if err != nil {
 			break
 		}
-		ws.wsMsgHandler(conn, p)
+		ws.msgHandler(p)
 		// con := ws.sockets[conn.RemoteAddr().String()].NetConn()
 	}
 }
