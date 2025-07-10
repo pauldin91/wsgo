@@ -1,16 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
-	"github.com/gorilla/websocket"
 	"github.com/pauldin91/wsgo/client"
 )
 
@@ -26,22 +23,7 @@ func main() {
 	client := client.NewWsClient(ctx, *host)
 	client.Connect()
 
-	client.OnMessageParseWsHandler(func(conn *websocket.Conn) {
-		reader := bufio.NewReader(os.Stdin)
-		for {
-			input, _, err := reader.ReadLine()
-			if err != nil {
-				client.SendError(err)
-				return
-			}
-			text := strings.TrimSpace(string(input))
-			if text == "exit" {
-				return
-			}
-			conn.WriteMessage(websocket.TextMessage, []byte(text+"\n"))
-
-		}
-	})
+	client.OnParseMsgHandler(os.Stdin)
 
 	<-ctx.Done()
 

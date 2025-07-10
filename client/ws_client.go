@@ -1,10 +1,13 @@
 package client
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -18,16 +21,17 @@ type WsClient struct {
 	ctx                  context.Context
 	incomingMsgHandler   func([]byte)
 	outgoingMsgHandler   func(net.Conn)
-	outgoingWsMsgHandler func(*websocket.Conn)
+	outgoingWsMsgHandler func()
 }
 
 func NewWsClient(ctx context.Context, address string) *WsClient {
 	var ws = &WsClient{
-		wg:                 &sync.WaitGroup{},
-		address:            address,
-		ctx:                ctx,
-		incomingMsgHandler: func(b []byte) {},
-		outgoingMsgHandler: func(c net.Conn) {},
+		wg:                   &sync.WaitGroup{},
+		address:              address,
+		ctx:                  ctx,
+		incomingMsgHandler:   func(b []byte) {},
+		outgoingMsgHandler:   func(c net.Conn) {},
+		outgoingWsMsgHandler: func() {},
 	}
 	return ws
 }
@@ -39,12 +43,27 @@ func (ws *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
 func (ws *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
 	ws.outgoingMsgHandler = handler
 }
-func (ws *WsClient) OnMessageParseWsHandler(handler func(*websocket.Conn)) {
-	ws.outgoingWsMsgHandler = handler
+func (ws *WsClient) OnParseMsgHandler(src *os.File) {
+	ws.outgoingWsMsgHandler = func() {
+
+		reader := bufio.NewReader(src)
+		for {
+			input, _, err := reader.ReadLine()
+			if err != nil {
+				ws.SendError(err)
+				return
+			}
+			text := strings.TrimSpace(string(input))
+			if text == "exit" {
+				return
+			}
+			ws.conn.WriteMessage(websocket.TextMessage, []byte(text+"\n"))
+		}
+	}
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
-		go ws.outgoingWsMsgHandler(ws.conn)
+		go ws.outgoingWsMsgHandler()
 		ws.handle()
 	}()
 }
