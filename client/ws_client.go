@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 
@@ -12,13 +11,14 @@ import (
 )
 
 type WsClient struct {
-	address            string
-	errorChan          chan error
-	conn               *websocket.Conn
-	wg                 *sync.WaitGroup
-	ctx                context.Context
-	incomingMsgHandler func([]byte)
-	outgoingMsgHandler func(net.Conn)
+	address              string
+	errorChan            chan error
+	conn                 *websocket.Conn
+	wg                   *sync.WaitGroup
+	ctx                  context.Context
+	incomingMsgHandler   func([]byte)
+	outgoingMsgHandler   func(net.Conn)
+	outgoingWsMsgHandler func(*websocket.Conn)
 }
 
 func NewWsClient(ctx context.Context, address string) *WsClient {
@@ -39,6 +39,15 @@ func (ws *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
 func (ws *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
 	ws.outgoingMsgHandler = handler
 }
+func (ws *WsClient) OnMessageParseWsHandler(handler func(*websocket.Conn)) {
+	ws.outgoingWsMsgHandler = handler
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		go ws.outgoingWsMsgHandler(ws.conn)
+		ws.handle()
+	}()
+}
 
 func (ws *WsClient) Connect() error {
 	dialer := websocket.Dialer{
@@ -51,7 +60,6 @@ func (ws *WsClient) Connect() error {
 	}
 
 	ws.conn = conn
-	log.Printf("connected to server %s", ws.address)
 	if ws.conn != nil {
 		ws.readFromServer()
 	}
@@ -97,15 +105,6 @@ func (ws *WsClient) readSocketBuffer() {
 
 func (ws *WsClient) SendError(err error) {
 	ws.errorChan <- err
-}
-
-func (ws *WsClient) HandleInputFrom(handler func()) {
-	ws.wg.Add(1)
-	go func() {
-		defer ws.wg.Done()
-		handler()
-		ws.handle()
-	}()
 }
 
 func (ws *WsClient) handle() {

@@ -5,12 +5,12 @@ import (
 	"context"
 	"flag"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
+	"github.com/gorilla/websocket"
 	"github.com/pauldin91/wsgo/client"
 )
 
@@ -19,29 +19,28 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	host := flag.String("host", ":4443", "Server host")
+	host := flag.String("host", "ws://localhost:4443/ws", "Server host")
 
 	flag.Parse()
 
-	client := client.NewTcpClient(ctx, *host)
+	client := client.NewWsClient(ctx, *host)
 	client.Connect()
-	client.OnMessageParseHandler(func(conn net.Conn) {
 
-		go func() {
-			reader := bufio.NewReader(os.Stdin)
-			for {
-				input, _, err := reader.ReadLine()
-				if err != nil {
-					client.SendError(err)
-					return
-				}
-				text := strings.TrimSpace(string(input))
-				if text == "exit" {
-					return
-				}
-				conn.Write([]byte(text))
+	client.OnMessageParseWsHandler(func(conn *websocket.Conn) {
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			input, _, err := reader.ReadLine()
+			if err != nil {
+				client.SendError(err)
+				return
 			}
-		}()
+			text := strings.TrimSpace(string(input))
+			if text == "exit" {
+				return
+			}
+			conn.WriteMessage(websocket.TextMessage, []byte(text+"\n"))
+
+		}
 	})
 
 	<-ctx.Done()
