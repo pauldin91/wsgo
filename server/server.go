@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"net"
 
 	"github.com/pauldin91/wsgo/internal"
 )
@@ -10,6 +11,7 @@ type Server interface {
 	Start() error
 	StartTls() error
 	OnMessageReceived(handler func([]byte))
+	GetConnections() map[string]net.Conn
 	Shutdown()
 }
 

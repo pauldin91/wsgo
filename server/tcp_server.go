@@ -73,6 +73,10 @@ func (server *TcpServer) Shutdown() {
 	server.wg.Wait()
 }
 
+func (server *TcpServer) GetConnections() map[string]net.Conn {
+	return server.connections
+}
+
 func (server *TcpServer) closeConnection(clientID string) {
 	server.mutex.Lock()
 	server.connections[clientID].Close()

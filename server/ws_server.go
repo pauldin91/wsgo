@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"sync"
 
@@ -30,6 +31,10 @@ func NewWsServer(ctx context.Context, serveAddress string) *WsServer {
 		wg:         &sync.WaitGroup{},
 		msgHandler: func(b []byte) {},
 	}
+}
+
+func (server *WsServer) GetConnections() map[string]net.Conn {
+	panic("unimplemented")
 }
 
 func (ws *WsServer) Start() error {
