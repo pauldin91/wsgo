@@ -44,7 +44,7 @@ func (server *TcpServer) Start() error {
 	}
 	server.listener = &listener
 	server.serve()
-	server.waitForSignal()
+	server.waitForShutdown()
 	return nil
 
 }
@@ -56,7 +56,7 @@ func (server *TcpServer) StartTls() error {
 	}
 	server.listener = &listener
 	server.serve()
-	server.waitForSignal()
+	server.waitForShutdown()
 	return nil
 
 }
@@ -121,7 +121,7 @@ func (server *TcpServer) handleConnection(clientID string) {
 	}
 }
 
-func (server *TcpServer) waitForSignal() {
+func (server *TcpServer) waitForShutdown() {
 	go func() {
 		for {
 			select {
