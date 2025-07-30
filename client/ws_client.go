@@ -36,6 +36,10 @@ func NewWsClient(ctx context.Context, address string) *WsClient {
 	return ws
 }
 
+func (ws *WsClient) Send(msg []byte) {
+	ws.conn.WriteMessage(websocket.TextMessage, msg)
+}
+
 func (ws *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
 	ws.incomingMsgHandler = handler
 }

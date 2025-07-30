@@ -14,6 +14,7 @@ type Client interface {
 	OnMessageReceivedHandler(func([]byte))
 	OnMessageParseHandler(func(net.Conn))
 	SendError(err error)
+	Send([]byte)
 }
 
 func NewClient(ctx context.Context, addr string, protocol internal.Protocol) Client {

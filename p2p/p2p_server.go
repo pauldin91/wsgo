@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -101,37 +100,38 @@ func (p2p *P2PServer) Connect(peers ...string) {
 }
 
 func (ws *P2PServer) OnParseMsgHandler(src *os.File) {
+	reader := bufio.NewReader(src)
+	var s string = "Available connections:-> "
+	c := 0
+	var m map[int]client.Client = make(map[int]client.Client)
+	for i, cl := range ws.peers {
+		s += fmt.Sprintf("%d. %s, ", c, i)
+		m[c] = cl
+		c++
+	}
+	s = strings.Trim(s, ",")
+
+	fmt.Println(s)
+
+	input, _ := reader.ReadString('\n')
+	choice, _ := strconv.Atoi(input)
+	fmt.Printf("selected choice is : %d\n", choice)
+
 	parser := func() {
-		var s string = "Available connections:-> "
-		c := 0
-		var m map[int]client.Client
-		for i, cl := range ws.peers {
-			s += fmt.Sprintf("%d. %s, ", c, i)
-			m[c] = cl
-			c++
-		}
-		s = strings.Trim(s, ",")
 
-		fmt.Println(s)
+		for {
+			input, _, err := reader.ReadLine()
+			fmt.Println(input)
+			if err != nil {
 
-		reader := bufio.NewReader(src)
-		input, _ := reader.ReadString('\n')
-		choice, _ := strconv.Atoi(input)
-		m[choice].OnMessageParseHandler(func(c net.Conn) {
-
-			for {
-				input, _, err := reader.ReadLine()
-				if err != nil {
-
-					return
-				}
-				text := strings.TrimSpace(string(input))
-				if text == "exit" {
-					return
-				}
-				c.Write([]byte(string(input) + "\n"))
+				return
 			}
-		})
+			text := strings.TrimSpace(string(input))
+			if text == "exit" {
+				return
+			}
+			m[choice].Send([]byte(string(input) + "\n"))
+		}
 
 	}
 	ws.wg.Add(1)

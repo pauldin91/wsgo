@@ -30,6 +30,7 @@ func main() {
 	p2pServer.MsgReceivedHandler(func(b []byte) {
 		fmt.Printf("%s", []byte("Echo: "+string(b)+"\n"))
 	})
+	p2pServer.OnParseMsgHandler(os.Stdin)
 	<-ctx.Done()
 	p2pServer.Shutdown()
 }

@@ -43,6 +43,10 @@ func (ws *TcpClient) OnMessageParseHandler(handler func(net.Conn)) {
 	ws.msgParseHandler = handler
 }
 
+func (ws *TcpClient) Send(msg []byte) {
+	ws.conn.Write([]byte(string(msg) + "\n"))
+}
+
 func (ws *TcpClient) Connect() error {
 	var conn net.Conn
 	var err error
