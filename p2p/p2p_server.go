@@ -86,10 +86,15 @@ func (p2p *P2PServer) Connect(peers ...string) {
 }
 func (p2p *P2PServer) ReadMsg(clientId string) []internal.Message {
 	msgs := make([]internal.Message, 0)
-	for m := range p2p.msgQueueIncoming[clientId] {
-		msgs = append(msgs, m)
+
+	for {
+		select {
+		case msg := <-p2p.msgQueueIncoming[clientId]:
+			msgs = append(msgs, msg)
+		default:
+			return msgs
+		}
 	}
-	return msgs
 }
 
 func (p2p *P2PServer) wait() {

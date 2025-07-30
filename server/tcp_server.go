@@ -43,7 +43,7 @@ func (server *TcpServer) Start() error {
 		return err
 	}
 	server.listener = &listener
-	server.listenForConnections()
+	server.serve()
 	server.waitForSignal()
 	return nil
 
@@ -55,7 +55,7 @@ func (server *TcpServer) StartTls() error {
 		return err
 	}
 	server.listener = &listener
-	server.listenForConnections()
+	server.serve()
 	server.waitForSignal()
 	return nil
 
@@ -84,7 +84,7 @@ func (server *TcpServer) closeConnection(clientID string) {
 	server.mutex.Unlock()
 }
 
-func (server *TcpServer) listenForConnections() {
+func (server *TcpServer) serve() {
 	go func() {
 		for {
 			conn, err := (*server.listener).Accept()
