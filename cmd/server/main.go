@@ -21,15 +21,12 @@ func main() {
 	flag.Parse()
 
 	log.Printf("[main] starting TCP server on %s", *host)
-	server := server.NewWsServer(ctx, *host)
+	server := server.NewTcpServer(ctx, *host)
 	server.Start()
 	server.OnMessageReceived(func(msg []byte) {
 
 		fmt.Printf("Received: %s\n", string(msg))
 	})
-
-	// p, _ := os.FindProcess(os.Getpid())
-	// p.Signal(syscall.SIGTERM)
 	<-ctx.Done()
 	log.Println("[main] shutdown signal received")
 	server.Shutdown()

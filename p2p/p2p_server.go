@@ -1,7 +1,14 @@
 package p2p
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/pauldin91/wsgo/client"
@@ -12,13 +19,14 @@ import (
 type P2PServer struct {
 	address          string
 	server           server.Server
-	peers            map[string]client.Client
 	ctx              context.Context
 	wg               *sync.WaitGroup
 	protocol         internal.Protocol
 	errChan          chan error
+	peers            map[string]client.Client
 	msgQueueIncoming map[string]chan internal.Message
 	sendMsgHandler   func([]byte)
+	rcvMsgHandler    func([]byte)
 }
 
 func NewP2PServer(ctx context.Context, address string, pr internal.Protocol) *P2PServer {
@@ -32,6 +40,7 @@ func NewP2PServer(ctx context.Context, address string, pr internal.Protocol) *P2
 		errChan:          make(chan error),
 		msgQueueIncoming: make(map[string]chan internal.Message),
 		sendMsgHandler:   func([]byte) {},
+		rcvMsgHandler:    func([]byte) {},
 	}
 }
 
@@ -68,6 +77,10 @@ func (p2p *P2PServer) SetMsgReceivedHandler(handle func([]byte)) {
 	p2p.server.OnMessageReceived(handle)
 }
 
+func (p2p *P2PServer) MsgReceivedHandler(handle func([]byte)) {
+	p2p.rcvMsgHandler = handle
+}
+
 func (p2p *P2PServer) SetSendMsg(clientId string, msg []byte) {
 	p2p.server.GetConnections()[clientId].Write(msg)
 }
@@ -79,22 +92,53 @@ func (p2p *P2PServer) Connect(peers ...string) {
 		client.OnMessageReceivedHandler(func(msg []byte) {
 			p2p.msgQueueIncoming[client.GetConnId()] = make(chan internal.Message)
 			p2p.msgQueueIncoming[client.GetConnId()] <- internal.NewMessage(msg, p, p2p.address)
+			js, _ := json.Marshal(msg)
+			p2p.rcvMsgHandler(js)
 		})
 		p2p.peers[client.GetConnId()] = client
-
 	}
+	fmt.Printf("connected to peers: %s\n", peers)
 }
-func (p2p *P2PServer) ReadMsg(clientId string) []internal.Message {
-	msgs := make([]internal.Message, 0)
 
-	for {
-		select {
-		case msg := <-p2p.msgQueueIncoming[clientId]:
-			msgs = append(msgs, msg)
-		default:
-			return msgs
+func (ws *P2PServer) OnParseMsgHandler(src *os.File) {
+	parser := func() {
+		var s string = "Available connections:-> "
+		c := 0
+		var m map[int]client.Client
+		for i, cl := range ws.peers {
+			s += fmt.Sprintf("%d. %s, ", c, i)
+			m[c] = cl
+			c++
 		}
+		s = strings.Trim(s, ",")
+
+		fmt.Println(s)
+
+		reader := bufio.NewReader(src)
+		input, _ := reader.ReadString('\n')
+		choice, _ := strconv.Atoi(input)
+		m[choice].OnMessageParseHandler(func(c net.Conn) {
+
+			for {
+				input, _, err := reader.ReadLine()
+				if err != nil {
+
+					return
+				}
+				text := strings.TrimSpace(string(input))
+				if text == "exit" {
+					return
+				}
+				c.Write([]byte(string(input) + "\n"))
+			}
+		})
+
 	}
+	ws.wg.Add(1)
+	go func() {
+		defer ws.wg.Done()
+		go parser()
+	}()
 }
 
 func (p2p *P2PServer) wait() {

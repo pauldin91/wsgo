@@ -1,12 +1,8 @@
 package client
 
 import (
-	"bytes"
 	"context"
-	"io"
-	"log"
 	"net"
-	"sync"
 
 	"github.com/quic-go/quic-go"
 )
@@ -21,32 +17,34 @@ func NewQuicClient() *QuicClient {
 }
 
 func (qs *QuicClient) Connect() error {
-	var wg *sync.WaitGroup = &sync.WaitGroup{}
-	addr := "localhost:3000"
-	go func(addr string) {
-		rsp, err := hclient.Get(addr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("Got response for %s: %#v", addr, rsp)
+	// var wg *sync.WaitGroup = &sync.WaitGroup{}
+	// addr := "localhost:3000"
+	go func() {
+		/*
+			rsp, err := hclient.Get(addr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Got response for %s: %#v", addr, rsp)
 
-		body := &bytes.Buffer{}
-		_, err = io.Copy(body, rsp.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
+			body := &bytes.Buffer{}
+			_, err = io.Copy(body, rsp.Body)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		log.Printf("Response Body (%d bytes):\n%s", body.Len(), body.Bytes())
+			log.Printf("Response Body (%d bytes):\n%s", body.Len(), body.Bytes())
 
-		wg.Done()
-	}(addr)
+			wg.Done()*/
+	}()
+	return nil
 }
 
 func (qs *QuicClient) Close() {
 
 }
 func (qs *QuicClient) GetConnId() string {
-
+	return ""
 }
 func (qs *QuicClient) OnMessageReceivedHandler(func([]byte)) {
 

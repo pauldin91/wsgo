@@ -24,6 +24,18 @@ services:
     networks:
       - wsgo
 
+  p2p.server:
+    build:
+      context: .
+      dockerfile: ./p2p.server.dockerfile
+    ports:
+      - "8443:8443"
+    environment:
+      - host=:8443
+      - peers=:4443
+    networks:
+      - wsgo
+
 networks:
   wsgo:
     driver: bridge

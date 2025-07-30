@@ -1,9 +1,9 @@
 package internal
 
 type Message struct {
-	Sender   string
-	Receiver string
-	Content  []byte
+	Sender   string `json:"sender"`
+	Receiver string `json:"receiver"`
+	Content  []byte `json:"content"`
 }
 
 func NewMessage(content []byte, sender, receiver string) Message {
