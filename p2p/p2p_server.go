@@ -57,20 +57,6 @@ func (p2p *P2PServer) Start() {
 	p2p.wait()
 }
 
-func (p2p *P2PServer) StartTls() {
-	p2p.wg.Add(1)
-	go func() {
-		defer p2p.wg.Done()
-		err := p2p.server.StartTls()
-		if err != nil {
-			p2p.errChan <- err
-			return
-		}
-	}()
-
-	p2p.wait()
-}
-
 func (p2p *P2PServer) SetMsgReceivedHandler(handle func([]byte)) {
 
 	p2p.server.OnMessageReceived(handle)

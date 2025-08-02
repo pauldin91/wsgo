@@ -10,13 +10,6 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-type QuicServer struct {
-	ctx         context.Context
-	address     string
-	listener    *quic.Listener
-	connections map[string]*quic.Conn
-}
-
 type loggingWriter struct{ io.Writer }
 
 func (w loggingWriter) Write(b []byte) (int, error) {
@@ -24,20 +17,29 @@ func (w loggingWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
+type QuicServer struct {
+	ctx           context.Context
+	address       string
+	listener      *quic.Listener
+	connections   map[string]*quic.Conn
+	msgRcvHandler func([]byte)
+}
+
 func NewQuicServer(ctx context.Context, address string) *QuicServer {
 	return &QuicServer{
-		ctx:         ctx,
-		address:     address,
-		connections: map[string]*quic.Conn{},
+		ctx:           ctx,
+		address:       address,
+		connections:   map[string]*quic.Conn{},
+		msgRcvHandler: func(b []byte) {},
 	}
 }
 
 func (qs *QuicServer) Start() error {
-	listener, err := quic.ListenAddr(qs.address, nil, nil)
+	var err error
+	qs.listener, err = quic.ListenAddr(qs.address, nil, nil)
 	if err != nil {
 		return err
 	}
-	qs.listener = listener
 	qs.handleConnections()
 	return nil
 }
@@ -82,14 +84,17 @@ func (qs *QuicServer) handle(conn *quic.Conn) {
 	}()
 }
 
-func OnMessageReceived(handler func([]byte)) {
-
+func (qs *QuicServer) OnMessageReceived(handler func([]byte)) {
+	qs.msgRcvHandler = handler
 }
 
-func GetConnections() map[string]net.Conn {
+func (qs *QuicServer) GetConnections() net.Conn {
 	panic("unimplemented")
 }
 
 func (qs *QuicServer) Shutdown() {
+	for _, c := range qs.connections {
+		c.CloseWithError(quic.ApplicationErrorCode(quic.NoError), "server closed")
+	}
 
 }

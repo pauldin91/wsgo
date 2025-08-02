@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"sync"
@@ -19,10 +20,14 @@ type WsServer struct {
 	msgHandler func([]byte)
 	certFile   string
 	certKey    string
+	tls        *tls.Config
+	server     *http.Server
+	listener   net.Listener
 }
 
-func NewWsServer(ctx context.Context, serveAddress string) *WsServer {
-	return &WsServer{
+func NewWsServerWithCerts(ctx context.Context, serveAddress string, tls *tls.Config) *WsServer {
+
+	server := &WsServer{
 		address:    serveAddress,
 		ctx:        ctx,
 		sockets:    make(map[string]*websocket.Conn),
@@ -31,6 +36,11 @@ func NewWsServer(ctx context.Context, serveAddress string) *WsServer {
 		wg:         &sync.WaitGroup{},
 		msgHandler: func(b []byte) {},
 	}
+	server.server = &http.Server{
+		Addr:      serveAddress,
+		TLSConfig: tls,
+	}
+	return server
 }
 
 func (server *WsServer) GetConnections() map[string]net.Conn {
@@ -40,25 +50,20 @@ func (server *WsServer) GetConnections() map[string]net.Conn {
 func (ws *WsServer) Start() error {
 	http.HandleFunc("/ws", ws.wsHandler)
 	go func() {
+		var err error
 
-		if err := http.ListenAndServe(ws.address, nil); err != nil {
+		ln, err := net.Listen("tcp", ws.address)
+		if ws.tls != nil {
+			ws.listener = tls.NewListener(ln, ws.tls)
+		} else {
+			ws.listener = ln
+		}
+		ws.server.Serve(ws.listener)
+		if err != nil {
 			ws.errChan <- err
 		}
 	}()
 
-	ws.waitForSignal()
-	return nil
-}
-
-func (ws *WsServer) StartTls() error {
-
-	http.HandleFunc("/ws", ws.wsHandler)
-	go func() {
-
-		if err := http.ListenAndServeTLS(ws.address, ws.certFile, ws.certKey, nil); err != nil {
-			ws.errChan <- err
-		}
-	}()
 	ws.waitForSignal()
 	return nil
 }

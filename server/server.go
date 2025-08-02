@@ -9,7 +9,6 @@ import (
 
 type Server interface {
 	Start() error
-	StartTls() error
 	OnMessageReceived(handler func([]byte))
 	GetConnections() map[string]net.Conn
 	Shutdown()
@@ -20,7 +19,7 @@ func NewServer(ctx context.Context, addr string, protocol internal.Protocol) Ser
 	case internal.TCP:
 		return NewTcpServer(ctx, addr)
 	case internal.WebSocket:
-		return NewWsServer(ctx, addr)
+		return NewWsServerWithCerts(ctx, addr, nil)
 	case internal.QUIC:
 		panic("unimplemented")
 	case internal.WebRTC:

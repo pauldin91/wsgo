@@ -17,7 +17,7 @@ type TcpServer struct {
 	ctx         context.Context
 	wg          *sync.WaitGroup
 	errChan     chan error
-	listener    *net.Listener
+	listener    net.Listener
 	msgHandler  func([]byte)
 	config      *tls.Config
 }
@@ -37,24 +37,16 @@ func NewTcpServer(ctx context.Context, serveAddress string) *TcpServer {
 }
 
 func (server *TcpServer) Start() error {
+	var err error
+	if server.config == nil {
+		server.listener, err = net.Listen("tcp", server.address)
+	} else {
+		server.listener, err = tls.Listen("tcp", server.address, server.config)
 
-	listener, err := net.Listen("tcp", server.address)
+	}
 	if err != nil {
 		return err
 	}
-	server.listener = &listener
-	server.serve()
-	server.waitForShutdown()
-	return nil
-
-}
-
-func (server *TcpServer) StartTls() error {
-	listener, err := tls.Listen("tcp", server.address, server.config)
-	if err != nil {
-		return err
-	}
-	server.listener = &listener
 	server.serve()
 	server.waitForShutdown()
 	return nil
@@ -87,7 +79,7 @@ func (server *TcpServer) closeConnection(clientID string) {
 func (server *TcpServer) serve() {
 	go func() {
 		for {
-			conn, err := (*server.listener).Accept()
+			conn, err := server.listener.Accept()
 			if err != nil {
 				server.errChan <- err
 				return
