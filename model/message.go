@@ -1,4 +1,4 @@
-package internal
+package model
 
 type Message struct {
 	Sender   string `json:"sender"`
