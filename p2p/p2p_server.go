@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -47,8 +46,13 @@ func NewP2PServer(ctx context.Context, address string, pr model.Protocol) *P2PSe
 	}
 }
 
-func (p2p *P2PServer) GetConnections() map[string]net.Conn {
-	return p2p.server.GetConnections()
+func (p2p *P2PServer) GetConnections() map[string]string {
+	clients := make(map[string]string)
+	for k, v := range p2p.server.GetConnections() {
+		clients[k] = v.RemoteAddr().String()
+
+	}
+	return clients
 }
 
 func (p2p *P2PServer) Start() {
