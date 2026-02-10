@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/pauldin91/wsgo/internal"
+	"github.com/pauldin91/wsgo/model"
 	"github.com/pauldin91/wsgo/p2p"
 )
 
@@ -21,7 +21,7 @@ func main() {
 	fmt.Println(*peers)
 	fmt.Println(*host)
 
-	p2pServer := p2p.NewP2PServer(ctx, *host, internal.TCP)
+	p2pServer := p2p.NewP2PServer(ctx, *host, model.TCP)
 	p2pServer.Start()
 	p2pServer.Connect(*peers)
 	p2pServer.SetMsgReceivedHandler(func(b []byte) {

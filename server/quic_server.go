@@ -6,7 +6,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/pauldin91/wsgo/internal"
+	internal "github.com/pauldin91/wsgo/model"
 	"github.com/quic-go/quic-go"
 )
 

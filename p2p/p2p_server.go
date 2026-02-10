@@ -5,13 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/gorilla/websocket"
 	"github.com/pauldin91/wsgo/client"
-	"github.com/pauldin91/wsgo/internal"
+	model "github.com/pauldin91/wsgo/model"
 	"github.com/pauldin91/wsgo/server"
 )
 
@@ -20,27 +22,33 @@ type P2PServer struct {
 	server           server.Server
 	ctx              context.Context
 	wg               *sync.WaitGroup
-	protocol         internal.Protocol
+	protocol         model.Protocol
 	errChan          chan error
 	peers            map[string]client.Client
-	msgQueueIncoming map[string]chan internal.Message
+	wspeers          map[string]*websocket.Conn
+	msgQueueIncoming map[string]chan model.Message
 	sendMsgHandler   func([]byte)
 	rcvMsgHandler    func([]byte)
 }
 
-func NewP2PServer(ctx context.Context, address string, pr internal.Protocol) *P2PServer {
+func NewP2PServer(ctx context.Context, address string, pr model.Protocol) *P2PServer {
 	return &P2PServer{
 		address:          address,
 		server:           server.NewServer(ctx, address, pr),
 		peers:            make(map[string]client.Client),
+		wspeers:          make(map[string]*websocket.Conn),
 		ctx:              ctx,
 		wg:               &sync.WaitGroup{},
 		protocol:         pr,
 		errChan:          make(chan error),
-		msgQueueIncoming: make(map[string]chan internal.Message),
+		msgQueueIncoming: make(map[string]chan model.Message),
 		sendMsgHandler:   func([]byte) {},
 		rcvMsgHandler:    func([]byte) {},
 	}
+}
+
+func (p2p *P2PServer) GetConnections() map[string]net.Conn {
+	return p2p.server.GetConnections()
 }
 
 func (p2p *P2PServer) Start() {
@@ -75,8 +83,8 @@ func (p2p *P2PServer) Connect(peers ...string) {
 		client := client.NewClient(p2p.ctx, p, p2p.protocol)
 		client.Connect()
 		client.OnMessageReceivedHandler(func(msg []byte) {
-			p2p.msgQueueIncoming[client.GetConnId()] = make(chan internal.Message)
-			p2p.msgQueueIncoming[client.GetConnId()] <- internal.NewMessage(msg, p, p2p.address)
+			p2p.msgQueueIncoming[client.GetConnId()] = make(chan model.Message)
+			p2p.msgQueueIncoming[client.GetConnId()] <- model.NewMessage(msg, p, p2p.address)
 			js, _ := json.Marshal(msg)
 			p2p.rcvMsgHandler(js)
 		})

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/pauldin91/wsgo/internal"
+	model "github.com/pauldin91/wsgo/model"
 )
 
 type Client interface {
@@ -17,15 +17,15 @@ type Client interface {
 	Send([]byte)
 }
 
-func NewClient(ctx context.Context, addr string, protocol internal.Protocol) Client {
+func NewClient(ctx context.Context, addr string, protocol model.Protocol) Client {
 	switch protocol {
-	case internal.TCP:
+	case model.TCP:
 		return NewTcpClient(ctx, addr)
-	case internal.WebSocket:
+	case model.WebSocket:
 		return NewWsClient(ctx, addr)
-	case internal.QUIC:
+	case model.QUIC:
 		panic("unimplemented")
-	case internal.WebRTC:
+	case model.WebRTC:
 		panic("unimplemented")
 	default:
 		panic("unsupported")

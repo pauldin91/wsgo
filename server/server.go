@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/pauldin91/wsgo/internal"
+	model "github.com/pauldin91/wsgo/model"
 )
 
 type Server interface {
@@ -14,15 +14,15 @@ type Server interface {
 	Shutdown()
 }
 
-func NewServer(ctx context.Context, addr string, protocol internal.Protocol) Server {
+func NewServer(ctx context.Context, addr string, protocol model.Protocol) Server {
 	switch protocol {
-	case internal.TCP:
+	case model.TCP:
 		return NewTcpServer(ctx, addr)
-	case internal.WebSocket:
+	case model.WebSocket:
 		return NewWsServerWithCerts(ctx, addr, nil)
-	case internal.QUIC:
+	case model.QUIC:
 		panic("unimplemented")
-	case internal.WebRTC:
+	case model.WebRTC:
 		panic("unimplemented")
 	default:
 		panic("unsupported")
