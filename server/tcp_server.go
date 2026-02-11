@@ -124,6 +124,8 @@ func (server *TcpServer) handleConnection(clientID string) {
 			}
 			break
 		}
+		log.Printf("Client %s sent %v\n", clientID, buffer)
+
 		server.msgHandler(buffer)
 	}
 }
