@@ -33,7 +33,7 @@ type P2PServer struct {
 }
 
 func NewP2PServer(ctx context.Context, address string, protocol string) (*P2PServer, error) {
-	srv, err := server.NewServer(ctx, address, protocol)
+	srv, err := server.NewServer(address, protocol)
 	if err != nil {
 		return nil, err
 	}

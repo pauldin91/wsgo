@@ -13,7 +13,7 @@ type Server interface {
 	Shutdown()
 }
 
-func NewServer(ctx context.Context, addr string, protocol string) (Server, error) {
+func NewServer(addr string, protocol string) (Server, error) {
 	switch protocol {
 	case "tcp":
 		return NewTcpServer(addr), nil
