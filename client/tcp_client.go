@@ -25,9 +25,11 @@ type TcpClient struct {
 
 func NewTcpClient(address string) *TcpClient {
 	var ws = &TcpClient{
-		wg:        &sync.WaitGroup{},
-		address:   address,
-		errorChan: make(chan error, 1),
+		wg:                 &sync.WaitGroup{},
+		address:            address,
+		errorChan:          make(chan error, 1),
+		msgReceivedHandler: func(b []byte) {},
+		msgParseHandler:    func(c net.Conn) {},
 	}
 	return ws
 }
@@ -75,6 +77,10 @@ func (ws *TcpClient) Connect(ctx context.Context) error {
 		defer ws.wg.Done()
 		ws.handle(ctx)
 	}()
+
+	if ws.msgParseHandler != nil {
+		ws.msgParseHandler(ws.conn)
+	}
 
 	return nil
 }
