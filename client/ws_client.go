@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -29,9 +30,12 @@ func NewWsClient(address string) *WsClient {
 		address = "ws://localhost:8080"
 	}
 	var ws = &WsClient{
-		wg:        &sync.WaitGroup{},
-		address:   address,
-		errorChan: make(chan error, 1),
+		wg:                   &sync.WaitGroup{},
+		address:              address,
+		errorChan:            make(chan error, 1),
+		incomingMsgHandler:   func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
+		outgoingMsgHandler:   func(c net.Conn) {},
+		outgoingWsMsgHandler: func() {},
 	}
 	return ws
 }

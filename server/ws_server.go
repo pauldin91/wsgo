@@ -28,12 +28,13 @@ type WsServer struct {
 
 func NewWsServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WsServer {
 	server := &WsServer{
-		address: serveAddress,
-		sockets: make(map[string]*websocket.Conn),
-		errChan: make(chan error, 1),
-		mutex:   sync.Mutex{},
-		wg:      &sync.WaitGroup{},
-		mux:     http.NewServeMux(),
+		address:    serveAddress,
+		sockets:    make(map[string]*websocket.Conn),
+		errChan:    make(chan error, 1),
+		mutex:      sync.Mutex{},
+		wg:         &sync.WaitGroup{},
+		mux:        http.NewServeMux(),
+		msgHandler: func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
 	}
 	server.server = &http.Server{
 		Addr:      serveAddress,

@@ -29,6 +29,7 @@ func NewTcpServer(serveAddress string) *TcpServer {
 		errChan:     make(chan error),
 		mutex:       sync.Mutex{},
 		wg:          &sync.WaitGroup{},
+		msgHandler:  func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
 	}
 
 	return server
