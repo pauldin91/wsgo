@@ -18,26 +18,29 @@ type WsClient struct {
 	errorChan            chan error
 	conn                 *websocket.Conn
 	wg                   *sync.WaitGroup
-	ctx                  context.Context
+	cancel               context.CancelFunc
 	incomingMsgHandler   func([]byte)
 	outgoingMsgHandler   func(net.Conn)
 	outgoingWsMsgHandler func()
 }
 
-func NewWsClient(ctx context.Context, address string) *WsClient {
+func NewWsClient(address string) *WsClient {
+	if address == "" {
+		address = "ws://localhost:8080"
+	}
 	var ws = &WsClient{
-		wg:                   &sync.WaitGroup{},
-		address:              address,
-		ctx:                  ctx,
-		incomingMsgHandler:   func(b []byte) {},
-		outgoingMsgHandler:   func(c net.Conn) {},
-		outgoingWsMsgHandler: func() {},
+		wg:        &sync.WaitGroup{},
+		address:   address,
+		errorChan: make(chan error, 1),
 	}
 	return ws
 }
 
-func (ws *WsClient) Send(msg []byte) {
-	ws.conn.WriteMessage(websocket.TextMessage, msg)
+func (ws *WsClient) Send(msg []byte) error {
+	if ws.conn == nil {
+		return fmt.Errorf("connection not established")
+	}
+	return ws.conn.WriteMessage(websocket.TextMessage, msg)
 }
 
 func (ws *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
@@ -49,7 +52,6 @@ func (ws *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
 }
 func (ws *WsClient) OnParseMsgHandler(src *os.File) {
 	ws.outgoingWsMsgHandler = func() {
-
 		reader := bufio.NewReader(src)
 		for {
 			input, _, err := reader.ReadLine()
@@ -61,18 +63,20 @@ func (ws *WsClient) OnParseMsgHandler(src *os.File) {
 			if text == "exit" {
 				return
 			}
-			ws.conn.WriteMessage(websocket.TextMessage, []byte(text+"\n"))
+			if err := ws.Send([]byte(text + "\n")); err != nil {
+				ws.SendError(err)
+				return
+			}
 		}
 	}
 	ws.wg.Add(1)
 	go func() {
 		defer ws.wg.Done()
-		go ws.outgoingWsMsgHandler()
-		ws.handle()
+		ws.outgoingWsMsgHandler()
 	}()
 }
 
-func (ws *WsClient) Connect() error {
+func (ws *WsClient) Connect(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -83,9 +87,8 @@ func (ws *WsClient) Connect() error {
 	}
 
 	ws.conn = conn
-	if ws.conn != nil {
-		ws.readFromServer()
-	}
+	ctx, ws.cancel = context.WithCancel(ctx)
+	ws.readFromServer(ctx)
 	return nil
 }
 
@@ -95,45 +98,56 @@ func (ws *WsClient) GetConnId() string {
 }
 
 func (ws *WsClient) Close() {
-
+	if ws.cancel != nil {
+		ws.cancel()
+	}
 	if ws.conn != nil {
 		ws.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		ws.conn.Close()
 	}
 	ws.wg.Wait()
+	if ws.errorChan != nil {
+		close(ws.errorChan)
+	}
 }
 
-func (ws *WsClient) readFromServer() {
-	ws.wg.Add(1)
+func (ws *WsClient) readFromServer(ctx context.Context) {
+	ws.wg.Add(2)
 	go func() {
 		defer ws.wg.Done()
-
 		ws.readSocketBuffer()
-		ws.handle()
+	}()
+	go func() {
+		defer ws.wg.Done()
+		ws.handle(ctx)
 	}()
 }
 
 func (ws *WsClient) readSocketBuffer() {
-	go func() {
-		for {
-			_, message, err := ws.conn.ReadMessage()
-			if err != nil {
-				ws.errorChan <- err
-				return
+	for {
+		_, message, err := ws.conn.ReadMessage()
+		if err != nil {
+			select {
+			case ws.errorChan <- err:
+			default:
 			}
-			ws.incomingMsgHandler(message)
+			return
 		}
-	}()
+		ws.incomingMsgHandler(message)
+	}
 }
 
 func (ws *WsClient) SendError(err error) {
-	ws.errorChan <- err
+	select {
+	case ws.errorChan <- err:
+	default:
+	}
 }
 
-func (ws *WsClient) handle() {
+func (ws *WsClient) handle(ctx context.Context) {
 	for {
 		select {
-		case <-ws.ctx.Done():
+		case <-ctx.Done():
 			_ = ws.conn.Close()
 			return
 

@@ -2,29 +2,28 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
-
-	model "github.com/pauldin91/wsgo/model"
 )
 
 type Server interface {
-	Start() error
+	Start(context.Context)
 	OnMessageReceived(handler func([]byte))
 	GetConnections() map[string]net.Conn
 	Shutdown()
 }
 
-func NewServer(ctx context.Context, addr string, protocol model.Protocol) Server {
+func NewServer(ctx context.Context, addr string, protocol string) (Server, error) {
 	switch protocol {
-	case model.TCP:
-		return NewTcpServer(ctx, addr)
-	case model.WebSocket:
-		return NewWsServerWithCerts(ctx, addr, nil)
-	case model.QUIC:
-		panic("unimplemented")
-	case model.WebRTC:
-		panic("unimplemented")
+	case "tcp":
+		return NewTcpServer(addr), nil
+	case "websocket", "ws":
+		return NewWsServerWithCerts(addr, nil), nil
+	case "quic":
+		return nil, fmt.Errorf("QUIC protocol not yet implemented")
+	case "webrtc":
+		return nil, fmt.Errorf("WebRTC protocol not yet implemented")
 	default:
-		panic("unsupported")
+		return nil, fmt.Errorf("unsupported protocol: %s", protocol)
 	}
 }

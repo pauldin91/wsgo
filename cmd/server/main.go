@@ -21,11 +21,10 @@ func main() {
 	flag.Parse()
 
 	log.Printf("[main] starting TCP server on %s", *host)
-	server := server.NewTcpServer(ctx, *host)
-	server.Start()
+	server := server.NewTcpServer(*host)
+	server.Start(ctx)
 	server.OnMessageReceived(func(msg []byte) {
-
-		fmt.Printf("Received: %s\n", string(msg))
+		fmt.Printf("Received: %s\n", msg)
 	})
 	<-ctx.Done()
 	log.Println("[main] shutdown signal received")

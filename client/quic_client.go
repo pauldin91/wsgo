@@ -2,56 +2,48 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net"
-
-	"github.com/quic-go/quic-go"
 )
 
 type QuicClient struct {
-	ctx  context.Context
-	conn *quic.Conn
+	ctx                context.Context
+	cancel             context.CancelFunc
+	msgReceivedHandler func([]byte)
+	msgParseHandler    func(net.Conn)
 }
 
 func NewQuicClient() *QuicClient {
 	return &QuicClient{}
 }
 
-func (qs *QuicClient) Connect() error {
-	// var wg *sync.WaitGroup = &sync.WaitGroup{}
-	// addr := "localhost:3000"
-	go func() {
-		/*
-			rsp, err := hclient.Get(addr)
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Printf("Got response for %s: %#v", addr, rsp)
-
-			body := &bytes.Buffer{}
-			_, err = io.Copy(body, rsp.Body)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			log.Printf("Response Body (%d bytes):\n%s", body.Len(), body.Bytes())
-
-			wg.Done()*/
-	}()
-	return nil
+func (qs *QuicClient) Connect(ctx context.Context) error {
+	return fmt.Errorf("QUIC client not implemented")
 }
 
 func (qs *QuicClient) Close() {
-
+	if qs.cancel != nil {
+		qs.cancel()
+	}
 }
+
 func (qs *QuicClient) GetConnId() string {
 	return ""
 }
-func (qs *QuicClient) OnMessageReceivedHandler(func([]byte)) {
+
+func (qs *QuicClient) OnMessageReceivedHandler(handler func([]byte)) {
+	qs.msgReceivedHandler = handler
+}
+
+func (qs *QuicClient) OnMessageParseHandler(handler func(net.Conn)) {
+	qs.msgParseHandler = handler
 
 }
-func (qs *QuicClient) OnMessageParseHandler(func(net.Conn)) {
 
-}
 func (qs *QuicClient) SendError(err error) {
 
+}
+
+func (qs *QuicClient) Send(msg []byte) error {
+	return fmt.Errorf("QUIC client not implemented")
 }

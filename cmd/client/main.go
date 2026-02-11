@@ -17,11 +17,12 @@ func main() {
 	defer stop()
 
 	host := flag.String("host", "ws://localhost:4443/ws", "Server host")
-
 	flag.Parse()
 
-	client := client.NewWsClient(ctx, *host)
-	client.Connect()
+	client := client.NewWsClient(*host)
+	if err := client.Connect(ctx); err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
 
 	client.OnParseMsgHandler(os.Stdin)
 

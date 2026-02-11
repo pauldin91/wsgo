@@ -17,20 +17,17 @@ type TcpClient struct {
 	errorChan          chan error
 	conn               net.Conn
 	wg                 *sync.WaitGroup
-	ctx                context.Context
+	cancel             context.CancelFunc
 	tlsConf            *tls.Config
 	msgReceivedHandler func([]byte)
 	msgParseHandler    func(net.Conn)
 }
 
-func NewTcpClient(ctx context.Context, address string) *TcpClient {
+func NewTcpClient(address string) *TcpClient {
 	var ws = &TcpClient{
-		wg:                 &sync.WaitGroup{},
-		address:            address,
-		ctx:                ctx,
-		errorChan:          make(chan error),
-		msgReceivedHandler: func(b []byte) {},
-		msgParseHandler:    func(c net.Conn) {},
+		wg:        &sync.WaitGroup{},
+		address:   address,
+		errorChan: make(chan error, 1),
 	}
 	return ws
 }
@@ -43,11 +40,15 @@ func (ws *TcpClient) OnMessageParseHandler(handler func(net.Conn)) {
 	ws.msgParseHandler = handler
 }
 
-func (ws *TcpClient) Send(msg []byte) {
-	ws.conn.Write([]byte(string(msg) + "\n"))
+func (ws *TcpClient) Send(msg []byte) error {
+	if ws.conn == nil {
+		return fmt.Errorf("connection not established")
+	}
+	_, err := ws.conn.Write([]byte(string(msg) + "\n"))
+	return err
 }
 
-func (ws *TcpClient) Connect() error {
+func (ws *TcpClient) Connect(ctx context.Context) error {
 	var conn net.Conn
 	var err error
 
@@ -55,7 +56,6 @@ func (ws *TcpClient) Connect() error {
 		conn, err = net.Dial("tcp", ws.address)
 	} else {
 		conn, err = tls.Dial("tcp", ws.address, ws.tlsConf)
-
 	}
 
 	if err != nil {
@@ -65,11 +65,15 @@ func (ws *TcpClient) Connect() error {
 
 	log.Printf("connected to server %s", ws.address)
 
-	ws.wg.Add(1)
+	ctx, ws.cancel = context.WithCancel(ctx)
+	ws.wg.Add(2)
 	go func() {
 		defer ws.wg.Done()
 		ws.readSocketBuffer()
-		ws.handle()
+	}()
+	go func() {
+		defer ws.wg.Done()
+		ws.handle(ctx)
 	}()
 
 	return nil
@@ -81,47 +85,54 @@ func (ws *TcpClient) GetConnId() string {
 }
 
 func (ws *TcpClient) Close() {
-
+	if ws.cancel != nil {
+		ws.cancel()
+	}
 	if ws.conn != nil {
 		ws.conn.Write([]byte("Remote host terminated connection"))
 		ws.conn.Close()
 	}
 	ws.wg.Wait()
+	if ws.errorChan != nil {
+		close(ws.errorChan)
+	}
 }
 
 func (ws *TcpClient) readSocketBuffer() {
-	go func() {
-		for {
-			reader := bufio.NewReader(ws.conn)
-			buffer, _, err := reader.ReadLine()
-			if err != nil {
-				if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
-					return
-				}
-				ws.errorChan <- err
+	reader := bufio.NewReader(ws.conn)
+	for {
+		buffer, _, err := reader.ReadLine()
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				return
 			}
-			ws.msgReceivedHandler(buffer)
+			select {
+			case ws.errorChan <- err:
+			default:
+			}
+			return
 		}
-	}()
+		ws.msgReceivedHandler(buffer)
+	}
 }
 
 func (ws *TcpClient) SendError(err error) {
-	ws.errorChan <- err
+	select {
+	case ws.errorChan <- err:
+	default:
+	}
 }
 
-func (ws *TcpClient) handle() {
-	go func() {
+func (ws *TcpClient) handle(ctx context.Context) {
 
-		for {
-			select {
-			case <-ws.ctx.Done():
-				_ = ws.conn.Close()
-				return
+	for {
+		select {
+		case <-ctx.Done():
+			_ = ws.conn.Close()
+			return
 
-			case <-ws.errorChan:
-				return
-			}
+		case <-ws.errorChan:
+			return
 		}
-	}()
+	}
 }
