@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -48,6 +49,8 @@ func NewP2PServer(ctx context.Context, address string, protocol string) (*P2PSer
 		protocolType:     protocol,
 		errChan:          make(chan error, 1),
 		msgQueueIncoming: make(map[string]chan proto.Message),
+		sendMsgHandler:   func(msg []byte) {},
+		rcvMsgHandler:    func(msg []byte) { log.Printf("Echo: %v\n", msg) },
 	}, nil
 }
 
