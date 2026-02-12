@@ -15,149 +15,155 @@ import (
 )
 
 type WsClient struct {
-	address              string
-	errorChan            chan error
-	conn                 *websocket.Conn
-	wg                   *sync.WaitGroup
-	cancel               context.CancelFunc
-	incomingMsgHandler   func([]byte)
-	outgoingMsgHandler   func(net.Conn)
-	outgoingWsMsgHandler func()
+	address                 string
+	errorChan               chan error
+	conn                    *websocket.Conn
+	connMutex               sync.RWMutex
+	wg                      *sync.WaitGroup
+	cancel                  context.CancelFunc
+	onMessageReceivedFunc   func([]byte)
+	onConnectionEstablished func(net.Conn)
+	onInputReadyHandler     func()
 }
 
 func NewWsClient(address string) *WsClient {
 	if address == "" {
 		address = "ws://localhost:8080"
 	}
-	var ws = &WsClient{
-		wg:                   &sync.WaitGroup{},
-		address:              address,
-		errorChan:            make(chan error, 1),
-		incomingMsgHandler:   func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
-		outgoingMsgHandler:   func(c net.Conn) {},
-		outgoingWsMsgHandler: func() {},
+	return &WsClient{
+		wg:                      &sync.WaitGroup{},
+		address:                 address,
+		errorChan:               make(chan error, 1),
+		onMessageReceivedFunc:   func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
+		onConnectionEstablished: func(c net.Conn) {},
+		onInputReadyHandler:     func() {},
 	}
-	return ws
 }
 
-func (ws *WsClient) Send(msg []byte) error {
-	if ws.conn == nil {
+func (c *WsClient) Send(msg []byte) error {
+	c.connMutex.RLock()
+	conn := c.conn
+	c.connMutex.RUnlock()
+
+	if conn == nil {
 		return fmt.Errorf("connection not established")
 	}
-	return ws.conn.WriteMessage(websocket.TextMessage, msg)
+	return conn.WriteMessage(websocket.TextMessage, msg)
 }
 
-func (ws *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
-	ws.incomingMsgHandler = handler
+func (c *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
+	c.onMessageReceivedFunc = handler
 }
 
-func (ws *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
-	ws.outgoingMsgHandler = handler
+func (c *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
+	c.onConnectionEstablished = handler
 }
-func (ws *WsClient) OnParseMsgHandler(src *os.File) {
-	ws.outgoingWsMsgHandler = func() {
+func (c *WsClient) OnParseMsgHandler(src *os.File) {
+	c.onInputReadyHandler = func() {
 		reader := bufio.NewReader(src)
 		for {
 			input, _, err := reader.ReadLine()
 			if err != nil {
-				ws.SendError(err)
+				c.SendError(err)
 				return
 			}
 			text := strings.TrimSpace(string(input))
 			if text == "exit" {
 				return
 			}
-			if err := ws.Send([]byte(text + "\n")); err != nil {
-				ws.SendError(err)
+			if err := c.Send([]byte(text + "\n")); err != nil {
+				c.SendError(err)
 				return
 			}
 		}
 	}
-	ws.wg.Add(1)
+	c.wg.Add(1)
 	go func() {
-		defer ws.wg.Done()
-		ws.outgoingWsMsgHandler()
+		defer c.wg.Done()
+		c.onInputReadyHandler()
 	}()
 }
 
-func (ws *WsClient) Connect(ctx context.Context) error {
+func (c *WsClient) Connect(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
-	conn, _, err := dialer.Dial(ws.address, nil)
+	conn, _, err := dialer.Dial(c.address, nil)
 	if err != nil {
 		return err
 	}
 
-	ws.conn = conn
-	ctx, ws.cancel = context.WithCancel(ctx)
-	ws.readFromServer(ctx)
+	c.connMutex.Lock()
+	c.conn = conn
+	c.connMutex.Unlock()
+
+	ctx, c.cancel = context.WithCancel(ctx)
+	c.wg.Add(2)
+	go func() {
+		defer c.wg.Done()
+		c.readMessages()
+	}()
+	go func() {
+		defer c.wg.Done()
+		c.handleShutdown(ctx)
+	}()
 	return nil
 }
 
-func (ws *WsClient) GetConnId() string {
-	return fmt.Sprintf("%p", ws.conn)
-
+func (c *WsClient) GetConnId() string {
+	c.connMutex.RLock()
+	defer c.connMutex.RUnlock()
+	return fmt.Sprintf("%p", c.conn)
 }
 
-func (ws *WsClient) Close() {
-	if ws.cancel != nil {
-		ws.cancel()
+func (c *WsClient) Close() {
+	if c.cancel != nil {
+		c.cancel()
 	}
-	if ws.conn != nil {
-		ws.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		ws.conn.Close()
+	c.connMutex.Lock()
+	if c.conn != nil {
+		c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		c.conn.Close()
 	}
-	ws.wg.Wait()
-	if ws.errorChan != nil {
-		close(ws.errorChan)
-	}
+	c.connMutex.Unlock()
+	c.wg.Wait()
+	close(c.errorChan)
 }
 
-func (ws *WsClient) readFromServer(ctx context.Context) {
-	ws.wg.Add(2)
-	go func() {
-		defer ws.wg.Done()
-		ws.readSocketBuffer()
-	}()
-	go func() {
-		defer ws.wg.Done()
-		ws.handle(ctx)
-	}()
-}
+func (c *WsClient) readMessages() {
+	c.connMutex.RLock()
+	conn := c.conn
+	c.connMutex.RUnlock()
 
-func (ws *WsClient) readSocketBuffer() {
 	for {
-		_, message, err := ws.conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
 			select {
-			case ws.errorChan <- err:
+			case c.errorChan <- err:
 			default:
 			}
 			return
 		}
-		ws.incomingMsgHandler(message)
+		c.onMessageReceivedFunc(message)
 	}
 }
 
-func (ws *WsClient) SendError(err error) {
+func (c *WsClient) SendError(err error) {
 	select {
-	case ws.errorChan <- err:
+	case c.errorChan <- err:
 	default:
 	}
 }
 
-func (ws *WsClient) handle(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			_ = ws.conn.Close()
-			return
-
-		case <-ws.errorChan:
-			return
-
-		}
+func (c *WsClient) handleShutdown(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+	case <-c.errorChan:
 	}
+	c.connMutex.Lock()
+	if c.conn != nil {
+		c.conn.Close()
+	}
+	c.connMutex.Unlock()
 }

@@ -11,26 +11,24 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/websocket"
 	"github.com/pauldin91/wsgo/client"
 	proto "github.com/pauldin91/wsgo/protocol"
 	"github.com/pauldin91/wsgo/server"
 )
 
 type P2PServer struct {
-	address          string
-	server           server.Server
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               *sync.WaitGroup
-	protocolType     string
-	errChan          chan error
-	peers            map[string]client.Client
-	peersMutex       sync.Mutex
-	wspeers          map[string]*websocket.Conn
-	msgQueueIncoming map[string]chan proto.Message
-	sendMsgHandler   func([]byte)
-	rcvMsgHandler    func([]byte)
+	address                  string
+	server                   server.Server
+	cancel                   context.CancelFunc
+	wg                       *sync.WaitGroup
+	protocolType             string
+	errorChan                chan error
+	peersMutex               sync.RWMutex
+	peers                    map[string]client.Client
+	incomingMsgQueues        map[string]chan proto.Message
+	incomingMsgQueuesMux     sync.RWMutex
+	onMessageSentHandler     func([]byte)
+	onMessageReceivedHandler func([]byte)
 }
 
 func NewP2PServer(ctx context.Context, address string, protocol string) (*P2PServer, error) {
@@ -39,149 +37,151 @@ func NewP2PServer(ctx context.Context, address string, protocol string) (*P2PSer
 		return nil, err
 	}
 	return &P2PServer{
-		address:          address,
-		server:           srv,
-		ctx:              ctx,
-		peers:            make(map[string]client.Client),
-		peersMutex:       sync.Mutex{},
-		wspeers:          make(map[string]*websocket.Conn),
-		wg:               &sync.WaitGroup{},
-		protocolType:     protocol,
-		errChan:          make(chan error, 1),
-		msgQueueIncoming: make(map[string]chan proto.Message),
-		sendMsgHandler:   func(msg []byte) {},
-		rcvMsgHandler:    func(msg []byte) { log.Printf("Echo: %v\n", msg) },
+		address:                  address,
+		server:                   srv,
+		peers:                    make(map[string]client.Client),
+		wg:                       &sync.WaitGroup{},
+		protocolType:             protocol,
+		errorChan:                make(chan error, 1),
+		incomingMsgQueues:        make(map[string]chan proto.Message),
+		onMessageSentHandler:     func(msg []byte) {},
+		onMessageReceivedHandler: func(msg []byte) { log.Printf("Echo: %v\n", msg) },
 	}, nil
 }
 
-func (p2p *P2PServer) GetConnections() map[string]string {
-	clients := make(map[string]string)
-	for k, v := range p2p.server.GetConnections() {
+func (p *P2PServer) GetConnections() map[string]string {
+	p.peersMutex.RLock()
+	defer p.peersMutex.RUnlock()
+	conns := p.server.GetConnections()
+	clients := make(map[string]string, len(conns))
+	for k, v := range conns {
 		clients[k] = v.RemoteAddr().String()
-
 	}
 	return clients
 }
 
-func (p2p *P2PServer) Start(ctx context.Context) {
-	p2p.ctx, p2p.cancel = context.WithCancel(ctx)
-	p2p.wg.Add(2)
+func (p *P2PServer) Start(ctx context.Context) {
+	ctx, p.cancel = context.WithCancel(ctx)
+	p.wg.Add(2)
 	go func() {
-		defer p2p.wg.Done()
-		p2p.server.Start(p2p.ctx)
+		defer p.wg.Done()
+		p.server.Start(ctx)
 	}()
 	go func() {
-		defer p2p.wg.Done()
-		p2p.wait(p2p.ctx)
+		defer p.wg.Done()
+		p.waitForShutdown(ctx)
 	}()
 }
 
-func (p2p *P2PServer) SetMsgReceivedHandler(handle func([]byte)) {
-
-	p2p.server.OnMessageReceived(handle)
+func (p *P2PServer) SetMsgReceivedHandler(handle func([]byte)) {
+	p.server.OnMessageReceived(handle)
 }
 
-func (p2p *P2PServer) MsgReceivedHandler(handle func([]byte)) {
-	p2p.rcvMsgHandler = handle
+func (p *P2PServer) MsgReceivedHandler(handle func([]byte)) {
+	p.onMessageReceivedHandler = handle
 }
 
-func (p2p *P2PServer) SetSendMsg(clientId string, msg []byte) {
-	p2p.server.GetConnections()[clientId].Write(msg)
+func (p *P2PServer) SetSendMsg(clientId string, msg []byte) {
+	conns := p.server.GetConnections()
+	if conn, exists := conns[clientId]; exists {
+		conn.Write(msg)
+	}
 }
 
-func (p2p *P2PServer) Connect(peers ...string) error {
-	for _, p := range peers {
-		cl, err := client.NewClient(p2p.ctx, p, p2p.protocolType)
+func (p *P2PServer) Connect(peers ...string) error {
+	for _, peerAddr := range peers {
+		cl, err := client.NewClient(context.Background(), peerAddr, p.protocolType)
 		if err != nil {
-			return fmt.Errorf("failed to create client for %s: %w", p, err)
+			return fmt.Errorf("failed to create client for %s: %w", peerAddr, err)
 		}
-		if err := cl.Connect(p2p.ctx); err != nil {
-			return fmt.Errorf("failed to connect to %s: %w", p, err)
+		if err := cl.Connect(context.Background()); err != nil {
+			return fmt.Errorf("failed to connect to %s: %w", peerAddr, err)
 		}
+		connID := cl.GetConnId()
 		cl.OnMessageReceivedHandler(func(msg []byte) {
-			p2p.msgQueueIncoming[cl.GetConnId()] = make(chan proto.Message, 10)
-			if m, err := proto.NewMessage(msg, p, p2p.address); err == nil {
+			p.incomingMsgQueuesMux.Lock()
+			if _, exists := p.incomingMsgQueues[connID]; !exists {
+				p.incomingMsgQueues[connID] = make(chan proto.Message, 10)
+			}
+			p.incomingMsgQueuesMux.Unlock()
+
+			if m, err := proto.NewMessage(msg, peerAddr, p.address); err == nil {
 				select {
-				case p2p.msgQueueIncoming[cl.GetConnId()] <- m:
+				case p.incomingMsgQueues[connID] <- m:
 				default:
 				}
 			}
 			js, _ := json.Marshal(msg)
-			p2p.rcvMsgHandler(js)
+			p.onMessageReceivedHandler(js)
 		})
-		p2p.peersMutex.Lock()
-		p2p.peers[cl.GetConnId()] = cl
-		p2p.peersMutex.Unlock()
+		p.peersMutex.Lock()
+		p.peers[connID] = cl
+		p.peersMutex.Unlock()
 	}
 	fmt.Printf("connected to peers: %s\n", peers)
 	return nil
 }
 
-func (ws *P2PServer) OnParseMsgHandler(src *os.File) {
+func (p *P2PServer) OnParseMsgHandler(src *os.File) {
 	reader := bufio.NewReader(src)
 	var s string = "Available connections:-> "
 	c := 0
-	var m map[int]client.Client = make(map[int]client.Client)
-	for i, cl := range ws.peers {
+
+	p.peersMutex.RLock()
+	var m map[int]client.Client = make(map[int]client.Client, len(p.peers))
+	for i, cl := range p.peers {
 		s += fmt.Sprintf("%d. %s, ", c, i)
 		m[c] = cl
 		c++
 	}
-	s = strings.Trim(s, ",")
+	p.peersMutex.RUnlock()
 
+	s = strings.Trim(s, ",")
 	fmt.Println(s)
 
 	input, _ := reader.ReadString('\n')
-	choice, _ := strconv.Atoi(input)
+	choice, _ := strconv.Atoi(strings.TrimSpace(input))
 	fmt.Printf("selected choice is : %d\n", choice)
 
 	parser := func() {
-
 		for {
 			input, _, err := reader.ReadLine()
-			fmt.Println(input)
 			if err != nil {
-
 				return
 			}
 			text := strings.TrimSpace(string(input))
 			if text == "exit" {
 				return
 			}
-			m[choice].Send([]byte(string(input) + "\n"))
+			if selectedClient, exists := m[choice]; exists {
+				selectedClient.Send([]byte(text + "\n"))
+			}
 		}
-
 	}
-	ws.wg.Add(1)
+	p.wg.Add(1)
 	go func() {
-		defer ws.wg.Done()
-		go parser()
+		defer p.wg.Done()
+		parser()
 	}()
 }
 
-func (p2p *P2PServer) wait(ctx context.Context) {
-	for {
-		select {
-		case <-p2p.errChan:
-			return
-		case <-ctx.Done():
-			return
-		}
+func (p *P2PServer) waitForShutdown(ctx context.Context) {
+	select {
+	case <-p.errorChan:
+	case <-ctx.Done():
 	}
 }
 
-func (p2p *P2PServer) Shutdown() {
-	if p2p.cancel != nil {
-		p2p.cancel()
+func (p *P2PServer) Shutdown() {
+	if p.cancel != nil {
+		p.cancel()
 	}
-	p2p.peersMutex.Lock()
-	for _, p := range p2p.peers {
-		p.Close()
+	p.peersMutex.Lock()
+	for _, peer := range p.peers {
+		peer.Close()
 	}
-	p2p.peersMutex.Unlock()
-	p2p.wg.Wait()
-	p2p.server.Shutdown()
-	if p2p.errChan != nil {
-		close(p2p.errChan)
-	}
+	p.peersMutex.Unlock()
+	p.wg.Wait()
+	p.server.Shutdown()
+	close(p.errorChan)
 }

@@ -12,136 +12,138 @@ import (
 )
 
 type TcpServer struct {
-	address     string
-	mutex       sync.Mutex
-	connections map[string]net.Conn
-	wg          *sync.WaitGroup
-	errChan     chan error
-	listener    net.Listener
-	msgHandler  func([]byte)
-	config      *tls.Config
+	address                  string
+	connectionsMutex         sync.RWMutex
+	connections              map[string]net.Conn
+	wg                       *sync.WaitGroup
+	errorChan                chan error
+	listener                 net.Listener
+	onMessageReceivedHandler func([]byte)
+	tlsConfig                *tls.Config
 }
 
 func NewTcpServer(serveAddress string) *TcpServer {
-	server := &TcpServer{
-		address:     serveAddress,
-		connections: make(map[string]net.Conn),
-		errChan:     make(chan error),
-		mutex:       sync.Mutex{},
-		wg:          &sync.WaitGroup{},
-		msgHandler:  func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
+	return &TcpServer{
+		address:                  serveAddress,
+		connections:              make(map[string]net.Conn),
+		errorChan:                make(chan error, 1),
+		wg:                       &sync.WaitGroup{},
+		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
 	}
-
-	return server
 }
 
-func (server *TcpServer) Start(ctx context.Context) {
+func (s *TcpServer) Start(ctx context.Context) {
 	var err error
-	if server.config == nil {
-		server.listener, err = net.Listen("tcp", server.address)
+	if s.tlsConfig == nil {
+		s.listener, err = net.Listen("tcp", s.address)
 	} else {
-		server.listener, err = tls.Listen("tcp", server.address, server.config)
+		s.listener, err = tls.Listen("tcp", s.address, s.tlsConfig)
 	}
 	if err != nil {
 		select {
-		case server.errChan <- err:
+		case s.errorChan <- err:
 		default:
 		}
 		return
 	}
-	server.wg.Add(2)
+	s.wg.Add(2)
 	go func() {
-		defer server.wg.Done()
-		server.serve()
+		defer s.wg.Done()
+		s.acceptConnections()
 	}()
 	go func() {
-		defer server.wg.Done()
-		server.waitForShutdown(ctx)
+		defer s.wg.Done()
+		s.waitForShutdown(ctx)
 	}()
 }
 
-func (server *TcpServer) OnMessageReceived(handler func(msg []byte)) {
-	server.msgHandler = handler
+func (s *TcpServer) OnMessageReceived(handler func(msg []byte)) {
+	s.onMessageReceivedHandler = handler
 }
 
-func (server *TcpServer) Shutdown() {
-	if server.listener != nil {
-		server.listener.Close()
+func (s *TcpServer) Shutdown() {
+	if s.listener != nil {
+		s.listener.Close()
 	}
-	for _, c := range server.connections {
+	s.connectionsMutex.Lock()
+	for _, c := range s.connections {
 		c.Close()
 	}
-	server.wg.Wait()
-	if server.errChan != nil {
-		close(server.errChan)
+	s.connectionsMutex.Unlock()
+	s.wg.Wait()
+	close(s.errorChan)
+}
+
+func (s *TcpServer) GetConnections() map[string]net.Conn {
+	s.connectionsMutex.RLock()
+	defer s.connectionsMutex.RUnlock()
+	conns := make(map[string]net.Conn, len(s.connections))
+	for k, v := range s.connections {
+		conns[k] = v
 	}
+	return conns
 }
 
-func (server *TcpServer) GetConnections() map[string]net.Conn {
-	return server.connections
+func (s *TcpServer) closeConnection(clientID string) {
+	s.connectionsMutex.Lock()
+	if conn, exists := s.connections[clientID]; exists {
+		conn.Close()
+		delete(s.connections, clientID)
+	}
+	s.connectionsMutex.Unlock()
 }
 
-func (server *TcpServer) closeConnection(clientID string) {
-	server.mutex.Lock()
-	server.connections[clientID].Close()
-	delete(server.connections, clientID)
-	server.mutex.Unlock()
-}
-
-func (server *TcpServer) serve() {
+func (s *TcpServer) acceptConnections() {
 	for {
-		conn, err := server.listener.Accept()
+		conn, err := s.listener.Accept()
 		if err != nil {
 			select {
-			case server.errChan <- err:
+			case s.errorChan <- err:
 			default:
 			}
 			return
 		}
 		clientID := conn.RemoteAddr().String()
-		server.mutex.Lock()
-		server.connections[clientID] = conn
-		server.mutex.Unlock()
-		server.wg.Add(1)
-		go server.handleConnection(clientID)
+		s.connectionsMutex.Lock()
+		s.connections[clientID] = conn
+		s.connectionsMutex.Unlock()
+		s.wg.Add(1)
+		go s.handleConnection(clientID)
 	}
 }
 
-func (server *TcpServer) handleConnection(clientID string) {
-	defer server.wg.Done()
-	defer server.closeConnection(clientID)
+func (s *TcpServer) handleConnection(clientID string) {
+	defer s.wg.Done()
+	defer s.closeConnection(clientID)
 
-	reader := bufio.NewReader(server.connections[clientID])
+	s.connectionsMutex.RLock()
+	conn := s.connections[clientID]
+	s.connectionsMutex.RUnlock()
+
+	reader := bufio.NewReader(conn)
 	for {
 		buffer, _, err := reader.ReadLine()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) {
 				log.Printf("Client %s disconnected\n", clientID)
-				break
-			}
-			select {
-			case server.errChan <- err:
-			default:
+			} else {
+				select {
+				case s.errorChan <- err:
+				default:
+				}
 			}
 			break
 		}
 		log.Printf("Client %s sent %v\n", clientID, buffer)
-
-		server.msgHandler(buffer)
+		s.onMessageReceivedHandler(buffer)
 	}
 }
 
-func (server *TcpServer) waitForShutdown(ctx context.Context) {
-
-	for {
-		select {
-		case rcv := <-ctx.Done():
-			log.Printf("shutdown signal received %v\n", rcv)
-			return
-		case err := <-server.errChan:
-			log.Printf("error %v\n", err)
-			return
-		}
+func (s *TcpServer) waitForShutdown(ctx context.Context) {
+	select {
+	case rcv := <-ctx.Done():
+		log.Printf("shutdown signal received %v\n", rcv)
+	case err := <-s.errorChan:
+		log.Printf("error %v\n", err)
 	}
-
 }

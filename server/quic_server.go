@@ -11,59 +11,56 @@ import (
 )
 
 type QuicServer struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	address       string
-	listener      *quic.Listener
-	connections   map[string]*quic.Conn
-	mutex         sync.Mutex
-	wg            *sync.WaitGroup
-	msgRcvHandler func([]byte)
+	cancel             context.CancelFunc
+	address            string
+	listener           *quic.Listener
+	connectionsMutex   sync.RWMutex
+	connections        map[string]*quic.Conn
+	wg                 *sync.WaitGroup
+	onMessageReceived  func([]byte)
 }
 
 func NewQuicServer(ctx context.Context, address string) *QuicServer {
 	return &QuicServer{
-		ctx:         ctx,
 		address:     address,
 		connections: map[string]*quic.Conn{},
-		mutex:       sync.Mutex{},
 		wg:          &sync.WaitGroup{},
 	}
 }
 
-func (qs *QuicServer) Start(ctx context.Context) {
+func (s *QuicServer) Start(ctx context.Context) {
 	var err error
-	qs.listener, err = quic.ListenAddr(qs.address, crypto.GenerateTLSConfig(), nil)
+	s.listener, err = quic.ListenAddr(s.address, crypto.GenerateTLSConfig(), nil)
 	if err != nil {
 		return
 	}
-	qs.ctx, qs.cancel = context.WithCancel(ctx)
-	qs.wg.Add(1)
+	ctx, s.cancel = context.WithCancel(ctx)
+	s.wg.Add(1)
 	go func() {
-		defer qs.wg.Done()
-		qs.handleConnections()
+		defer s.wg.Done()
+		s.acceptConnections(ctx)
 	}()
 }
 
-func (qs *QuicServer) handleConnections() {
+func (s *QuicServer) acceptConnections(ctx context.Context) {
 	for {
-		conn, err := qs.listener.Accept(qs.ctx)
+		conn, err := s.listener.Accept(ctx)
 		if err != nil {
 			return
 		}
-		qs.mutex.Lock()
-		qs.connections[conn.RemoteAddr().String()] = conn
-		qs.mutex.Unlock()
-		qs.wg.Add(1)
+		s.connectionsMutex.Lock()
+		s.connections[conn.RemoteAddr().String()] = conn
+		s.connectionsMutex.Unlock()
+		s.wg.Add(1)
 		go func(c *quic.Conn) {
-			defer qs.wg.Done()
-			qs.handle(c)
+			defer s.wg.Done()
+			s.handleConnection(ctx, c)
 		}(conn)
 	}
 }
 
-func (qs *QuicServer) handle(conn *quic.Conn) {
-	stream, err := conn.AcceptStream(qs.ctx)
+func (s *QuicServer) handleConnection(ctx context.Context, conn *quic.Conn) {
+	stream, err := conn.AcceptStream(ctx)
 	if err != nil {
 		return
 	}
@@ -74,28 +71,28 @@ func (qs *QuicServer) handle(conn *quic.Conn) {
 		fmt.Printf("error read : %v\n", err.Error())
 		return
 	}
-	qs.msgRcvHandler(buffer[:n])
+	s.onMessageReceived(buffer[:n])
 }
 
-func (qs *QuicServer) OnMessageReceived(handler func([]byte)) {
-	qs.msgRcvHandler = handler
+func (s *QuicServer) OnMessageReceived(handler func([]byte)) {
+	s.onMessageReceived = handler
 }
 
-func (qs *QuicServer) GetConnections() map[string]net.Conn {
+func (s *QuicServer) GetConnections() map[string]net.Conn {
 	return make(map[string]net.Conn)
 }
 
-func (qs *QuicServer) Shutdown() {
-	if qs.cancel != nil {
-		qs.cancel()
+func (s *QuicServer) Shutdown() {
+	if s.cancel != nil {
+		s.cancel()
 	}
-	if qs.listener != nil {
-		qs.listener.Close()
+	if s.listener != nil {
+		s.listener.Close()
 	}
-	qs.mutex.Lock()
-	for _, c := range qs.connections {
+	s.connectionsMutex.Lock()
+	for _, c := range s.connections {
 		c.CloseWithError(quic.ApplicationErrorCode(quic.NoError), "server closed")
 	}
-	qs.mutex.Unlock()
-	qs.wg.Wait()
+	s.connectionsMutex.Unlock()
+	s.wg.Wait()
 }

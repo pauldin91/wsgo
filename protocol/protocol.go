@@ -9,15 +9,31 @@ const (
 	WebRTC    Type = "webrtc"
 )
 
-func (p Type) String() string {
-	return string(p)
+func (t Type) String() string {
+	return string(t)
 }
 
-func (p Type) IsValid() bool {
-	switch p {
+func (t Type) IsValid() bool {
+	switch t {
 	case TCP, WebSocket, QUIC, WebRTC:
 		return true
 	default:
 		return false
+	}
+}
+
+// ParseType converts a string to a Type
+func ParseType(s string) (Type, bool) {
+	switch s {
+	case "tcp":
+		return TCP, true
+	case "websocket", "ws":
+		return WebSocket, true
+	case "quic":
+		return QUIC, true
+	case "webrtc":
+		return WebRTC, true
+	default:
+		return "", false
 	}
 }

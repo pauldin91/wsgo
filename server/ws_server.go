@@ -12,31 +12,28 @@ import (
 )
 
 type WsServer struct {
-	address    string
-	mutex      sync.Mutex
-	sockets    map[string]*websocket.Conn
-	wg         *sync.WaitGroup
-	errChan    chan error
-	msgHandler func([]byte)
-	certFile   string
-	certKey    string
-	tls        *tls.Config
-	server     *http.Server
-	listener   net.Listener
-	mux        *http.ServeMux
+	address                  string
+	connectionsMutex         sync.RWMutex
+	websocketConns           map[string]*websocket.Conn
+	wg                       *sync.WaitGroup
+	errorChan                chan error
+	onMessageReceivedHandler func([]byte)
+	tlsConfig                *tls.Config
+	httpServer               *http.Server
+	listener                 net.Listener
+	mux                      *http.ServeMux
 }
 
 func NewWsServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WsServer {
 	server := &WsServer{
-		address:    serveAddress,
-		sockets:    make(map[string]*websocket.Conn),
-		errChan:    make(chan error, 1),
-		mutex:      sync.Mutex{},
-		wg:         &sync.WaitGroup{},
-		mux:        http.NewServeMux(),
-		msgHandler: func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
+		address:                  serveAddress,
+		websocketConns:           make(map[string]*websocket.Conn),
+		errorChan:                make(chan error, 1),
+		wg:                       &sync.WaitGroup{},
+		mux:                      http.NewServeMux(),
+		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
 	}
-	server.server = &http.Server{
+	server.httpServer = &http.Server{
 		Addr:      serveAddress,
 		TLSConfig: tlsConfig,
 		Handler:   server.mux,
@@ -45,81 +42,75 @@ func NewWsServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WsServer 
 	return server
 }
 
-func (server *WsServer) GetConnections() map[string]net.Conn {
-	server.mutex.Lock()
-	defer server.mutex.Unlock()
-	conns := make(map[string]net.Conn)
-	for k, v := range server.sockets {
+func (s *WsServer) GetConnections() map[string]net.Conn {
+	s.connectionsMutex.RLock()
+	defer s.connectionsMutex.RUnlock()
+	conns := make(map[string]net.Conn, len(s.websocketConns))
+	for k, v := range s.websocketConns {
 		conns[k] = v.UnderlyingConn()
 	}
 	return conns
 }
 
-func (ws *WsServer) Start(ctx context.Context) {
-	ws.wg.Add(2)
+func (s *WsServer) Start(ctx context.Context) {
+	s.wg.Add(2)
 	go func() {
-		defer ws.wg.Done()
+		defer s.wg.Done()
 		var err error
-		ln, err := net.Listen("tcp", ws.address)
+		ln, err := net.Listen("tcp", s.address)
 		if err != nil {
 			select {
-			case ws.errChan <- err:
+			case s.errorChan <- err:
 			default:
 			}
 			return
 		}
 
-		if ws.tls != nil {
-			ws.listener = tls.NewListener(ln, ws.tls)
+		if s.tlsConfig != nil {
+			s.listener = tls.NewListener(ln, s.tlsConfig)
 		} else {
-			ws.listener = ln
+			s.listener = ln
 		}
-		err = ws.server.Serve(ws.listener)
+		err = s.httpServer.Serve(s.listener)
 		if err != nil && err != http.ErrServerClosed {
 			select {
-			case ws.errChan <- err:
+			case s.errorChan <- err:
 			default:
 			}
 		}
 	}()
 	go func() {
-		defer ws.wg.Done()
-		ws.waitForSignal(ctx)
+		defer s.wg.Done()
+		s.waitForShutdown(ctx)
 	}()
 }
 
-func (ws *WsServer) waitForSignal(ctx context.Context) {
-	for {
-		select {
-		case rcv := <-ctx.Done():
-			log.Printf("shutdown signal received %v\n", rcv)
-			return
-		case <-ws.errChan:
-			return
-		}
+func (s *WsServer) waitForShutdown(ctx context.Context) {
+	select {
+	case rcv := <-ctx.Done():
+		log.Printf("shutdown signal received %v\n", rcv)
+	case <-s.errorChan:
 	}
 }
 
-func (server *WsServer) OnMessageReceived(handler func([]byte)) {
-	server.msgHandler = handler
+func (s *WsServer) OnMessageReceived(handler func([]byte)) {
+	s.onMessageReceivedHandler = handler
 }
 
-func (ws *WsServer) Shutdown() {
-	if ws.server != nil {
-		ws.server.Shutdown(context.Background())
+func (s *WsServer) Shutdown() {
+	if s.httpServer != nil {
+		s.httpServer.Shutdown(context.Background())
 	}
-	ws.mutex.Lock()
-	for _, c := range ws.sockets {
+	s.connectionsMutex.Lock()
+	for _, c := range s.websocketConns {
 		c.Close()
 	}
-	ws.mutex.Unlock()
-	ws.wg.Wait()
-	if ws.errChan != nil {
-		close(ws.errChan)
-	}
+	s.connectionsMutex.Unlock()
+	s.wg.Wait()
+	close(s.errorChan)
 }
 
-func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
+func (s *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
@@ -128,42 +119,43 @@ func (ws *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		select {
-		case ws.errChan <- err:
+		case s.errorChan <- err:
 		default:
 		}
 		return
 	}
 	clientID := conn.RemoteAddr().String()
 
-	ws.mutex.Lock()
-	ws.sockets[clientID] = conn
-	ws.mutex.Unlock()
-	ws.wg.Add(1)
+	s.connectionsMutex.Lock()
+	s.websocketConns[clientID] = conn
+	s.connectionsMutex.Unlock()
+	s.wg.Add(1)
 	go func() {
-		defer ws.wg.Done()
-		ws.handleConnection(conn)
+		defer s.wg.Done()
+		s.handleConnection(conn)
 	}()
 }
 
-func (ws *WsServer) handleConnection(conn *websocket.Conn) {
-	defer ws.closeConnection(conn.RemoteAddr().String())
+func (s *WsServer) handleConnection(conn *websocket.Conn) {
+	defer s.closeConnection(conn.RemoteAddr().String())
 
 	for {
 		_, p, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
-		ws.msgHandler(p)
-
+		s.onMessageReceivedHandler(p)
 	}
 }
 
-func (ws *WsServer) closeConnection(clientID string) {
-	ws.mutex.Lock()
-	err := ws.sockets[clientID].Close()
-	if err != nil {
-		log.Printf("error closing connection %v", err)
+func (s *WsServer) closeConnection(clientID string) {
+	s.connectionsMutex.Lock()
+	if conn, exists := s.websocketConns[clientID]; exists {
+		err := conn.Close()
+		if err != nil {
+			log.Printf("error closing connection %v", err)
+		}
+		delete(s.websocketConns, clientID)
 	}
-	delete(ws.sockets, clientID)
-	ws.mutex.Unlock()
+	s.connectionsMutex.Unlock()
 }

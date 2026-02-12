@@ -7,10 +7,8 @@ import (
 )
 
 type QuicClient struct {
-	ctx                context.Context
-	cancel             context.CancelFunc
-	msgReceivedHandler func([]byte)
-	msgParseHandler    func(net.Conn)
+	onMsgReceivedHandler func([]byte)
+	msgParseHandler      func(net.Conn)
 }
 
 func NewQuicClient() *QuicClient {
@@ -22,9 +20,7 @@ func (qs *QuicClient) Connect(ctx context.Context) error {
 }
 
 func (qs *QuicClient) Close() {
-	if qs.cancel != nil {
-		qs.cancel()
-	}
+
 }
 
 func (qs *QuicClient) GetConnId() string {
@@ -32,7 +28,7 @@ func (qs *QuicClient) GetConnId() string {
 }
 
 func (qs *QuicClient) OnMessageReceivedHandler(handler func([]byte)) {
-	qs.msgReceivedHandler = handler
+	qs.onMsgReceivedHandler = handler
 }
 
 func (qs *QuicClient) OnMessageParseHandler(handler func(net.Conn)) {
