@@ -11,13 +11,12 @@ import (
 )
 
 type QuicServer struct {
-	cancel             context.CancelFunc
-	address            string
-	listener           *quic.Listener
-	connectionsMutex   sync.RWMutex
-	connections        map[string]*quic.Conn
-	wg                 *sync.WaitGroup
-	onMessageReceived  func([]byte)
+	address                  string
+	listener                 *quic.Listener
+	connectionsMutex         sync.RWMutex
+	connections              map[string]*quic.Conn
+	wg                       *sync.WaitGroup
+	onMessageReceivedHandler func([]byte)
 }
 
 func NewQuicServer(ctx context.Context, address string) *QuicServer {
@@ -34,7 +33,6 @@ func (s *QuicServer) Start(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	ctx, s.cancel = context.WithCancel(ctx)
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -71,11 +69,11 @@ func (s *QuicServer) handleConnection(ctx context.Context, conn *quic.Conn) {
 		fmt.Printf("error read : %v\n", err.Error())
 		return
 	}
-	s.onMessageReceived(buffer[:n])
+	s.onMessageReceivedHandler(buffer[:n])
 }
 
 func (s *QuicServer) OnMessageReceived(handler func([]byte)) {
-	s.onMessageReceived = handler
+	s.onMessageReceivedHandler = handler
 }
 
 func (s *QuicServer) GetConnections() map[string]net.Conn {
@@ -83,9 +81,6 @@ func (s *QuicServer) GetConnections() map[string]net.Conn {
 }
 
 func (s *QuicServer) Shutdown() {
-	if s.cancel != nil {
-		s.cancel()
-	}
 	if s.listener != nil {
 		s.listener.Close()
 	}

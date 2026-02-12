@@ -19,7 +19,6 @@ import (
 type P2PServer struct {
 	address                  string
 	server                   server.Server
-	cancel                   context.CancelFunc
 	wg                       *sync.WaitGroup
 	protocolType             string
 	errorChan                chan error
@@ -61,7 +60,6 @@ func (p *P2PServer) GetConnections() map[string]string {
 }
 
 func (p *P2PServer) Start(ctx context.Context) {
-	ctx, p.cancel = context.WithCancel(ctx)
 	p.wg.Add(2)
 	go func() {
 		defer p.wg.Done()
@@ -173,9 +171,6 @@ func (p *P2PServer) waitForShutdown(ctx context.Context) {
 }
 
 func (p *P2PServer) Shutdown() {
-	if p.cancel != nil {
-		p.cancel()
-	}
 	p.peersMutex.Lock()
 	for _, peer := range p.peers {
 		peer.Close()

@@ -15,15 +15,14 @@ import (
 )
 
 type WsClient struct {
-	address                 string
-	errorChan               chan error
-	conn                    *websocket.Conn
-	connMutex               sync.RWMutex
-	wg                      *sync.WaitGroup
-	cancel                  context.CancelFunc
-	onMessageReceivedFunc   func([]byte)
-	onConnectionEstablished func(net.Conn)
-	onInputReadyHandler     func()
+	address                        string
+	errorChan                      chan error
+	conn                           *websocket.Conn
+	connMutex                      sync.RWMutex
+	wg                             *sync.WaitGroup
+	onMessageReceivedHandler       func([]byte)
+	onConnectionEstablishedHandler func(net.Conn)
+	onInputReadyHandler            func()
 }
 
 func NewWsClient(address string) *WsClient {
@@ -31,12 +30,12 @@ func NewWsClient(address string) *WsClient {
 		address = "ws://localhost:8080"
 	}
 	return &WsClient{
-		wg:                      &sync.WaitGroup{},
-		address:                 address,
-		errorChan:               make(chan error, 1),
-		onMessageReceivedFunc:   func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
-		onConnectionEstablished: func(c net.Conn) {},
-		onInputReadyHandler:     func() {},
+		wg:                             &sync.WaitGroup{},
+		address:                        address,
+		errorChan:                      make(chan error, 1),
+		onMessageReceivedHandler:       func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
+		onConnectionEstablishedHandler: func(c net.Conn) {},
+		onInputReadyHandler:            func() {},
 	}
 }
 
@@ -52,11 +51,11 @@ func (c *WsClient) Send(msg []byte) error {
 }
 
 func (c *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
-	c.onMessageReceivedFunc = handler
+	c.onMessageReceivedHandler = handler
 }
 
 func (c *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
-	c.onConnectionEstablished = handler
+	c.onConnectionEstablishedHandler = handler
 }
 func (c *WsClient) OnParseMsgHandler(src *os.File) {
 	c.onInputReadyHandler = func() {
@@ -98,7 +97,6 @@ func (c *WsClient) Connect(ctx context.Context) error {
 	c.conn = conn
 	c.connMutex.Unlock()
 
-	ctx, c.cancel = context.WithCancel(ctx)
 	c.wg.Add(2)
 	go func() {
 		defer c.wg.Done()
@@ -118,9 +116,6 @@ func (c *WsClient) GetConnId() string {
 }
 
 func (c *WsClient) Close() {
-	if c.cancel != nil {
-		c.cancel()
-	}
 	c.connMutex.Lock()
 	if c.conn != nil {
 		c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
@@ -145,7 +140,7 @@ func (c *WsClient) readMessages() {
 			}
 			return
 		}
-		c.onMessageReceivedFunc(message)
+		c.onMessageReceivedHandler(message)
 	}
 }
 

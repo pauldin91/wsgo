@@ -18,7 +18,6 @@ type TcpClient struct {
 	conn                     net.Conn
 	connMutex                sync.RWMutex
 	wg                       *sync.WaitGroup
-	cancel                   context.CancelFunc
 	tlsConfig                *tls.Config
 	onMessageReceivedHandler func([]byte)
 	onConnectionEstablished  func(net.Conn)
@@ -74,7 +73,6 @@ func (c *TcpClient) Connect(ctx context.Context) error {
 
 	log.Printf("connected to server %s", c.address)
 
-	ctx, c.cancel = context.WithCancel(ctx)
 	c.wg.Add(2)
 	go func() {
 		defer c.wg.Done()
@@ -97,9 +95,6 @@ func (c *TcpClient) GetConnId() string {
 }
 
 func (c *TcpClient) Close() {
-	if c.cancel != nil {
-		c.cancel()
-	}
 	c.connMutex.Lock()
 	if c.conn != nil {
 		c.conn.Close()
