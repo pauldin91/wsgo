@@ -24,7 +24,7 @@ func main() {
 	server := server.NewTcpServer(*host)
 	server.Start(ctx)
 	server.OnMessageReceived(func(msg []byte) {
-		fmt.Printf("Received: %s\n", msg)
+		fmt.Printf("Received: %s\n", string(msg))
 	})
 	<-ctx.Done()
 	log.Println("[main] shutdown signal received")

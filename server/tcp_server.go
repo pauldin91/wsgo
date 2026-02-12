@@ -134,7 +134,6 @@ func (s *TcpServer) handleConnection(clientID string) {
 			}
 			break
 		}
-		log.Printf("Client %s sent %v\n", clientID, buffer)
 		s.onMessageReceivedHandler(buffer)
 	}
 }
