@@ -86,7 +86,7 @@ func (p *P2PServer) SetSendMsg(clientId string, msg []byte) {
 	}
 }
 
-func (p *P2PServer) Connect(peers ...string) error {
+func (p *P2PServer) Connect(peers []string) error {
 	for _, peerAddr := range peers {
 		cl, err := client.NewClient(context.Background(), peerAddr, p.protocolType)
 		if err != nil {
