@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/pauldin91/wsgo/p2p"
@@ -25,7 +26,7 @@ func main() {
 	}
 	p2pServer.Start(ctx)
 	if *peers != "" {
-		if err := p2pServer.Connect(*peers); err != nil {
+		if err := p2pServer.Connect(strings.Split((*peers), ",")); err != nil {
 			fmt.Printf("Failed to connect to peers: %v\n", err)
 		}
 	}

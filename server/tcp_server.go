@@ -28,7 +28,7 @@ func NewTcpServer(serveAddress string) *TcpServer {
 		connections:              make(map[string]net.Conn),
 		errorChan:                make(chan error, 1),
 		wg:                       &sync.WaitGroup{},
-		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
+		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", string(bytes)) },
 	}
 }
 

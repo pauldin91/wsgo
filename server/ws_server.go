@@ -31,7 +31,7 @@ func NewWsServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WsServer 
 		errorChan:                make(chan error, 1),
 		wg:                       &sync.WaitGroup{},
 		mux:                      http.NewServeMux(),
-		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", bytes) },
+		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", string(bytes)) },
 	}
 	server.httpServer = &http.Server{
 		Addr:      serveAddress,
