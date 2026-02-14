@@ -30,7 +30,7 @@ type P2PServer struct {
 	onMessageReceivedHandler func([]byte)
 }
 
-func NewP2PServer(ctx context.Context, address string, protocol string) (*P2PServer, error) {
+func NewP2PServer(address string, protocol string) (*P2PServer, error) {
 	srv, err := server.NewServer(address, protocol)
 	if err != nil {
 		return nil, err

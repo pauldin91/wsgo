@@ -19,7 +19,7 @@ func main() {
 	peers := flag.String("peers", "", "Comma-separated list of peer addresses to connect to")
 	flag.Parse()
 
-	p2pServer, err := p2p.NewP2PServer(ctx, *host, "tcp")
+	p2pServer, err := p2p.NewP2PServer(*host, "tcp")
 	if err != nil {
 		fmt.Printf("Failed to create P2P server: %v\n", err)
 		os.Exit(1)
