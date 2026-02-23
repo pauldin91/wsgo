@@ -159,3 +159,14 @@ func (s *WsServer) closeConnection(clientID string) {
 	}
 	s.connectionsMutex.Unlock()
 }
+
+func (s *WsServer) Broadcast(msg []byte) error {
+	s.connectionsMutex.Lock()
+	defer s.connectionsMutex.Unlock()
+	for _, c := range s.websocketConns {
+		if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}

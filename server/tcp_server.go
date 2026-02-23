@@ -146,3 +146,15 @@ func (s *TcpServer) waitForShutdown(ctx context.Context) {
 		log.Printf("error %v\n", err)
 	}
 }
+
+func (s *TcpServer) Broadcast(msg []byte) error {
+	s.connectionsMutex.Lock()
+	defer s.connectionsMutex.Unlock()
+	for _, c := range s.connections {
+		_, err := c.Write(msg)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

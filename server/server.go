@@ -10,6 +10,7 @@ type Server interface {
 	Start(context.Context)
 	OnMessageReceived(handler func([]byte))
 	GetConnections() map[string]net.Conn
+	Broadcast([]byte) error
 	Shutdown()
 }
 

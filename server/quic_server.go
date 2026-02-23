@@ -91,3 +91,17 @@ func (s *QuicServer) Shutdown() {
 	s.connectionsMutex.Unlock()
 	s.wg.Wait()
 }
+
+func (s *QuicServer) Broadcast(msg []byte) error {
+	s.connectionsMutex.Lock()
+	defer s.connectionsMutex.Unlock()
+	for _, c := range s.connections {
+		s, err := c.OpenStreamSync(context.Background())
+		if err != nil {
+			return err
+		}
+		s.Write(msg)
+		s.Close()
+	}
+	return nil
+}
