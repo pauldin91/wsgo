@@ -20,7 +20,7 @@ func NewServer(addr string, protocol string) (Server, error) {
 	case "websocket", "ws":
 		return NewWsServerWithCerts(addr, nil), nil
 	case "quic":
-		return nil, fmt.Errorf("QUIC protocol not yet implemented")
+		return NewQuicServer(addr), nil
 	case "webrtc":
 		return nil, fmt.Errorf("WebRTC protocol not yet implemented")
 	default:

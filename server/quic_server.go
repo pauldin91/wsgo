@@ -19,7 +19,7 @@ type QuicServer struct {
 	onMessageReceivedHandler func([]byte)
 }
 
-func NewQuicServer(ctx context.Context, address string) *QuicServer {
+func NewQuicServer(address string) *QuicServer {
 	return &QuicServer{
 		address:     address,
 		connections: map[string]*quic.Conn{},
