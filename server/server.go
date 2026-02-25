@@ -8,6 +8,7 @@ import (
 
 type Server interface {
 	Start(context.Context)
+	//what will the server do with the message
 	OnMessageReceived(handler func([]byte))
 	GetConnections() map[string]net.Conn
 	Broadcast([]byte) error
