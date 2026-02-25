@@ -57,6 +57,7 @@ func (s *TcpServer) Start(ctx context.Context) {
 	}()
 }
 
+// what will the server do with the message
 func (s *TcpServer) OnMessageReceived(handler func(msg []byte)) {
 	s.onMessageReceivedHandler = handler
 }
