@@ -6,9 +6,11 @@ COPY go.mod ./
 COPY go.sum ./
 RUN go mod download
 
-COPY ./src ./src
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./src/cmd/tcp/client/main.go
+COPY ./client ./client
+COPY ./examples/client/ ./examples/client
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./examples/client/main.go
 
 FROM alpine:3.21
 
