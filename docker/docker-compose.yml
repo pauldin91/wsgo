@@ -4,8 +4,8 @@ services:
   tcp.server:
     init: true
     build:
-      context: .
-      dockerfile: ./raw.server.dockerfile
+      context: ..
+      dockerfile: docker/raw.server.dockerfile
     ports:
       - "4443:4443"
     environment:
@@ -15,8 +15,8 @@ services:
 
   ws.server:
     build:
-      context: .
-      dockerfile: ./ws.server.dockerfile
+      context: ..
+      dockerfile: docker/ws.server.dockerfile
     ports:
       - "6443:6443"
     environment:
@@ -26,8 +26,8 @@ services:
 
   p2p.server:
     build:
-      context: .
-      dockerfile: ./p2p.server.dockerfile
+      context: ..
+      dockerfile: docker/p2p.server.dockerfile
     ports:
       - "8443:8443"
     environment:

@@ -2,12 +2,12 @@ FROM golang:1.24 AS build
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
-RUN go mod download
+RUN echo ls -la
 
-COPY ./server ./server
-COPY ./examples/server ./examples/server
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./examples/server/main.go
 
