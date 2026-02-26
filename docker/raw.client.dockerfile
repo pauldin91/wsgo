@@ -2,12 +2,12 @@ FROM golang:1.24 AS build
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
-
-COPY ./client ./client
+COPY ./client/ ./client
+COPY ./internal/ ./internal
+COPY ./protocol/ ./protocol
 COPY ./examples/client/ ./examples/client
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./examples/client/main.go

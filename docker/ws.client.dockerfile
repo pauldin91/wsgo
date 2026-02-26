@@ -2,13 +2,16 @@ FROM golang:1.24 AS build
 
 WORKDIR /app
 
-COPY go.mod ./
-COPY go.sum ./
-COPY ./src ./src
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN go mod tidy
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o main ./src/cmd/ws/client/main.go
+COPY ./client/ ./client
+COPY ./internal/ ./internal
+COPY ./protocol/ ./protocol
+COPY ./examples/client/ ./examples/client
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./examples/client/main.go
 
 FROM alpine:3.21
 
