@@ -39,6 +39,7 @@ func (p *Peer) Start(ctx context.Context) {
 
 func (p *Peer) Shutdown() {
 	p.server.Shutdown()
+	p.this.Disconnect()
 }
 
 func (p *Peer) Connect(ctx context.Context, addr string) {

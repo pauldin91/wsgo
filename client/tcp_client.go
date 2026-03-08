@@ -143,3 +143,9 @@ func (c *TcpClient) handleShutdown(ctx context.Context) {
 	}
 	c.connMutex.Unlock()
 }
+
+func (c *TcpClient) Disconnect() error {
+	c.connMutex.Lock()
+	defer c.connMutex.Unlock()
+	return c.conn.Close()
+}

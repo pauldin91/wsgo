@@ -16,7 +16,8 @@ func NewWebRTCClient() WebRTCClient {
 	}
 }
 
-func (c *WebRTCClient) Close() {}
+func (c *WebRTCClient) Close()            {}
+func (c *WebRTCClient) Disconnect() error { return nil }
 func (c *WebRTCClient) Connect(context.Context) error {
 	return nil
 }

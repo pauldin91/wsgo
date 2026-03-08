@@ -83,6 +83,12 @@ func (c *WsClient) OnParseMsgHandler(src *os.File) {
 	}()
 }
 
+func (c *WsClient) Disconnect() error {
+	c.connMutex.Lock()
+	defer c.connMutex.Unlock()
+	return c.conn.Close()
+}
+
 func (c *WsClient) Connect(ctx context.Context) error {
 	dialer := websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},

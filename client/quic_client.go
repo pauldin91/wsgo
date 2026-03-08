@@ -36,6 +36,10 @@ func (qs *QuicClient) OnMessageParse(handler func(net.Conn)) {
 
 }
 
+func (qs *QuicClient) Disconnect() error {
+	return nil
+}
+
 func (qs *QuicClient) SendError(err error) {
 
 }
