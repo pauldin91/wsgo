@@ -27,11 +27,11 @@ func (qs *QuicClient) GetConnId() string {
 	return ""
 }
 
-func (qs *QuicClient) OnMessageReceivedHandler(handler func([]byte)) {
+func (qs *QuicClient) OnMessageReceived(handler func([]byte)) {
 	qs.onMsgReceivedHandler = handler
 }
 
-func (qs *QuicClient) OnMessageParseHandler(handler func(net.Conn)) {
+func (qs *QuicClient) OnMessageParse(handler func(net.Conn)) {
 	qs.msgParseHandler = handler
 
 }

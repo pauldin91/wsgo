@@ -33,11 +33,11 @@ func NewTcpClient(address string) *TcpClient {
 	}
 }
 
-func (c *TcpClient) OnMessageReceivedHandler(handler func([]byte)) {
+func (c *TcpClient) OnMessageReceived(handler func([]byte)) {
 	c.onMessageReceivedHandler = handler
 }
 
-func (c *TcpClient) OnMessageParseHandler(handler func(net.Conn)) {
+func (c *TcpClient) OnMessageParse(handler func(net.Conn)) {
 	c.onConnectionEstablished = handler
 }
 

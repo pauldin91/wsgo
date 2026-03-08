@@ -23,8 +23,8 @@ func (c *WebRTCClient) Connect(context.Context) error {
 func (c *WebRTCClient) GetConnId() string {
 	return c.connID
 }
-func (c *WebRTCClient) OnMessageReceivedHandler(func([]byte)) {}
-func (c *WebRTCClient) OnMessageParseHandler(func(net.Conn)) {
+func (c *WebRTCClient) OnMessageReceived(func([]byte)) {}
+func (c *WebRTCClient) OnMessageParse(func(net.Conn)) {
 
 }
 func SendError(err error) {}

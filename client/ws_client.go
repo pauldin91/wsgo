@@ -50,11 +50,11 @@ func (c *WsClient) Send(msg []byte) error {
 	return conn.WriteMessage(websocket.TextMessage, msg)
 }
 
-func (c *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
+func (c *WsClient) OnMessageReceived(handler func([]byte)) {
 	c.onMessageReceivedHandler = handler
 }
 
-func (c *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
+func (c *WsClient) OnMessageParse(handler func(net.Conn)) {
 	c.onConnectionEstablishedHandler = handler
 }
 func (c *WsClient) OnParseMsgHandler(src *os.File) {

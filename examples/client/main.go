@@ -22,7 +22,7 @@ func main() {
 
 	client := client.NewTcpClient(*host)
 
-	client.OnMessageReceivedHandler(func(msg []byte) {
+	client.OnMessageReceived(func(msg []byte) {
 		log.Printf("Received: %s", msg)
 	})
 

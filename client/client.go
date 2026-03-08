@@ -10,8 +10,8 @@ type Client interface {
 	Close()
 	Connect(context.Context) error
 	GetConnId() string
-	OnMessageReceivedHandler(func([]byte))
-	OnMessageParseHandler(func(net.Conn))
+	OnMessageReceived(func([]byte))
+	OnMessageParse(func(net.Conn))
 	SendError(err error)
 	Send([]byte) error
 }
