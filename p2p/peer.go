@@ -10,13 +10,11 @@ import (
 )
 
 type Peer struct {
-	peers                      []string
-	this                       client.Client
-	server                     server.Server
-	protocol                   string
-	msgReceivedHandler         func([]byte)
-	msgReceivedByClientHandler func([]byte)
-	msgReceivedByServerHandler func([]byte)
+	peers              []string
+	this               client.Client
+	server             server.Server
+	protocol           string
+	msgReceivedHandler func([]byte)
 }
 
 func NewPeer(addr, protocol string) *Peer {
@@ -25,11 +23,9 @@ func NewPeer(addr, protocol string) *Peer {
 		log.Fatalf("unable to create server: %v", err.Error())
 	}
 	return &Peer{
-		server:                     server,
-		protocol:                   protocol,
-		msgReceivedHandler:         func(m []byte) { fmt.Printf("generic handler %s\n", m) },
-		msgReceivedByClientHandler: func(m []byte) { fmt.Printf("Client received: %s\n", m) },
-		msgReceivedByServerHandler: func(m []byte) { fmt.Printf("Server received: %s\n", m) },
+		server:             server,
+		protocol:           protocol,
+		msgReceivedHandler: func(m []byte) { fmt.Printf("generic handler %s\n", m) },
 	}
 }
 
@@ -58,11 +54,11 @@ func (p *Peer) OnMessageReceived(handler func([]byte)) {
 }
 
 func (p *Peer) OnMessageReceivedByClient(handler func([]byte)) {
-	p.msgReceivedByClientHandler = handler
+	p.this.OnMessageReceived(handler)
 }
 
 func (p *Peer) OnMessageReceivedByServer(handler func([]byte)) {
-	p.msgReceivedByServerHandler = handler
+	p.server.OnMessageReceived(handler)
 }
 func (p *Peer) Broadcast(msg []byte) {
 	p.server.Broadcast(msg)
