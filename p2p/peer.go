@@ -64,6 +64,9 @@ func (p *Peer) OnMessageReceivedByClient(handler func([]byte)) {
 func (p *Peer) OnMessageReceivedByServer(handler func([]byte)) {
 	p.msgReceivedByServerHandler = handler
 }
+func (p *Peer) Broadcast(msg []byte) {
+	p.server.Broadcast(msg)
+}
 
 func (p *Peer) Send(msg []byte) {
 	p.this.Send(msg)
