@@ -38,15 +38,18 @@ func (p *Peer) Shutdown() {
 	p.this.Disconnect()
 }
 
-func (p *Peer) Connect(ctx context.Context, addr string) {
+func (p *Peer) Connect(ctx context.Context, addr string) error {
 	var err error
 	p.this, err = client.NewClient(ctx, addr, p.protocol)
 	if err != nil {
 		log.Fatalf("unable to create client: %v", err.Error())
+		return err
 	}
 	if err = p.this.Connect(ctx); err != nil {
 		log.Fatalf("unable to create client: %v", err.Error())
+		return err
 	}
+	return nil
 }
 
 func (p *Peer) OnMessageReceived(handler func([]byte)) {
