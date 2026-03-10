@@ -16,9 +16,8 @@ func main() {
 	peer := p2p.NewPeer(":8081", "tcp")
 	var err error
 	if err = peer.Connect(ctx, ":8080"); err == nil {
-
 		peer.OnMessageReceivedByClient(func(msg []byte) {
-			fmt.Printf("[client] received msg: %s", msg)
+			fmt.Printf("[client] received msg: %s\n", msg)
 		})
 	}
 	peer.OnMessageReceived(func(b []byte) {

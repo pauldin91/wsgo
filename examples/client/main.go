@@ -17,7 +17,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	host := flag.String("host", ":8080", "Server host")
+	host := flag.String("host", ":8081", "Server host")
 	flag.Parse()
 
 	client := client.NewTcpClient(*host)

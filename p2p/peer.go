@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/pauldin91/wsgo/client"
@@ -10,11 +9,9 @@ import (
 )
 
 type Peer struct {
-	peers              []string
-	this               client.Client
-	server             server.Server
-	protocol           string
-	msgReceivedHandler func([]byte)
+	this     client.Client
+	server   server.Server
+	protocol string
 }
 
 func NewPeer(addr, protocol string) *Peer {
@@ -23,9 +20,8 @@ func NewPeer(addr, protocol string) *Peer {
 		log.Fatalf("unable to create server: %v", err.Error())
 	}
 	return &Peer{
-		server:             server,
-		protocol:           protocol,
-		msgReceivedHandler: func(m []byte) { fmt.Printf("generic handler %s\n", m) },
+		server:   server,
+		protocol: protocol,
 	}
 }
 
@@ -52,15 +48,11 @@ func (p *Peer) Connect(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (p *Peer) OnMessageReceived(handler func([]byte)) {
-	p.msgReceivedHandler = handler
-}
-
 func (p *Peer) OnMessageReceivedByClient(handler func([]byte)) {
 	p.this.OnMessageReceived(handler)
 }
 
-func (p *Peer) OnMessageReceivedByServer(handler func([]byte)) {
+func (p *Peer) OnMessageReceived(handler func([]byte)) {
 	p.server.OnMessageReceived(handler)
 }
 func (p *Peer) Broadcast(msg []byte) {
