@@ -152,7 +152,7 @@ func (s *TcpServer) Broadcast(msg []byte) error {
 	s.connectionsMutex.Lock()
 	defer s.connectionsMutex.Unlock()
 	for _, c := range s.connections {
-		_, err := c.Write(msg)
+		_, err := c.Write([]byte(string(msg) + "\n"))
 		if err != nil {
 			return err
 		}

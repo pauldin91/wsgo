@@ -15,15 +15,13 @@ func main() {
 	defer cancel()
 	peer := p2p.NewPeer(":8081", "tcp")
 	var err error
+	peer.Start(ctx)
 	if err = peer.Connect(ctx, ":8080"); err == nil {
 		peer.OnMessageReceivedByClient(func(msg []byte) {
 			fmt.Printf("[client] received msg: %s\n", msg)
+			peer.Broadcast(msg)
 		})
 	}
-	peer.OnMessageReceived(func(b []byte) {
-		peer.Broadcast(b)
-	})
-	peer.Start(ctx)
 	defer peer.Shutdown()
 	<-ctx.Done()
 }

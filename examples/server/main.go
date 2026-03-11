@@ -40,7 +40,7 @@ func main() {
 				stop()
 				return
 			}
-			if err := server.Broadcast([]byte(string(input) + "\n")); err != nil {
+			if err := server.Broadcast(input); err != nil {
 				log.Printf("Broadcast error: %v", err)
 			}
 			conns := server.GetConnections()
