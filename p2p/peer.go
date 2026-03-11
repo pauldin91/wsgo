@@ -9,20 +9,25 @@ import (
 )
 
 type Peer struct {
-	this     client.Client
-	server   server.Server
-	protocol string
+	this   client.Client
+	server server.Server
 }
 
-func NewPeer(addr, protocol string) *Peer {
-	server, err := server.NewServer(addr, protocol)
+func NewPeer(hostAddr, peerAddr, protocol string) (*Peer, error) {
+
+	server, err := server.NewServer(hostAddr, protocol)
 	if err != nil {
-		log.Fatalf("unable to create server: %v", err.Error())
+		return nil, err
 	}
+	client, err := client.NewClient(peerAddr, protocol)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Peer{
-		server:   server,
-		protocol: protocol,
-	}
+		server: server,
+		this:   client,
+	}, nil
 }
 
 func (p *Peer) Start(ctx context.Context) {
@@ -34,13 +39,8 @@ func (p *Peer) Shutdown() {
 	p.this.Disconnect()
 }
 
-func (p *Peer) Connect(ctx context.Context, addr string) error {
+func (p *Peer) Connect(ctx context.Context) error {
 	var err error
-	p.this, err = client.NewClient(ctx, addr, p.protocol)
-	if err != nil {
-		log.Fatalf("unable to create client: %v", err.Error())
-		return err
-	}
 	if err = p.this.Connect(ctx); err != nil {
 		log.Fatalf("unable to create client: %v", err.Error())
 		return err
@@ -48,13 +48,11 @@ func (p *Peer) Connect(ctx context.Context, addr string) error {
 	return nil
 }
 
-func (p *Peer) OnMessageReceivedByClient(handler func([]byte)) {
-	p.this.OnMessageReceived(handler)
+func (p *Peer) OnMessageReceived(serverHandler, clientHandler func([]byte)) {
+	p.server.OnMessageReceived(serverHandler)
+	p.this.OnMessageReceived(clientHandler)
 }
 
-func (p *Peer) OnMessageReceived(handler func([]byte)) {
-	p.server.OnMessageReceived(handler)
-}
 func (p *Peer) Broadcast(msg []byte) {
 	p.server.Broadcast(msg)
 }

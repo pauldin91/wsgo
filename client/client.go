@@ -17,7 +17,7 @@ type Client interface {
 	Send([]byte) error
 }
 
-func NewClient(ctx context.Context, addr string, protocol string) (Client, error) {
+func NewClient(addr string, protocol string) (Client, error) {
 	switch protocol {
 	case "tcp":
 		return NewTcpClient(addr), nil

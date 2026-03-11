@@ -13,14 +13,19 @@ import (
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	peer := p2p.NewPeer(":8081", "tcp")
 	var err error
+	peer, err := p2p.NewPeer(":8081", ":8080", "tcp")
 	peer.Start(ctx)
-	if err = peer.Connect(ctx, ":8080"); err == nil {
-		peer.OnMessageReceivedByClient(func(msg []byte) {
-			fmt.Printf("[client] received msg: %s\n", msg)
-			peer.Broadcast(msg)
-		})
+	if err = peer.Connect(ctx); err == nil {
+		peer.OnMessageReceived(
+			func(msg []byte) {
+				fmt.Printf("[client] received msg: %s\n", msg)
+			},
+			func(msg []byte) {
+				fmt.Printf("[broadcast] msg: %s\n", msg)
+				peer.Broadcast(msg)
+
+			})
 	}
 	defer peer.Shutdown()
 	<-ctx.Done()
