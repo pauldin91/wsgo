@@ -22,7 +22,11 @@ func (s *WebRTCServer) Start(ctx context.Context) {
 
 	<-ctx.Done()
 }
-func (s *WebRTCServer) OnMessageReceived(handler func([]byte)) {}
+func (s *WebRTCServer) OnMessageReceived(handler func([]byte)) {
+	if handler != nil {
+		s.onMessageReceivedHandler = handler
+	}
+}
 func (s *WebRTCServer) GetConnections() map[string]net.Conn {
 	return nil
 }

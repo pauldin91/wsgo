@@ -73,7 +73,9 @@ func (s *QuicServer) handleConnection(ctx context.Context, conn *quic.Conn) {
 }
 
 func (s *QuicServer) OnMessageReceived(handler func([]byte)) {
-	s.onMessageReceivedHandler = handler
+	if handler != nil {
+		s.onMessageReceivedHandler = handler
+	}
 }
 
 func (s *QuicServer) GetConnections() map[string]net.Conn {

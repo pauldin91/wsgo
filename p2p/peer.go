@@ -49,8 +49,12 @@ func (p *Peer) Connect(ctx context.Context) error {
 }
 
 func (p *Peer) OnMessageReceived(serverHandler, clientHandler func([]byte)) {
-	p.server.OnMessageReceived(serverHandler)
-	p.this.OnMessageReceived(clientHandler)
+	if serverHandler != nil {
+		p.server.OnMessageReceived(serverHandler)
+	}
+	if clientHandler != nil {
+		p.this.OnMessageReceived(clientHandler)
+	}
 }
 
 func (p *Peer) Broadcast(msg []byte) {

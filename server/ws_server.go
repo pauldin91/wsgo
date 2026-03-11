@@ -94,7 +94,9 @@ func (s *WsServer) waitForShutdown(ctx context.Context) {
 }
 
 func (s *WsServer) OnMessageReceived(handler func([]byte)) {
-	s.onMessageReceivedHandler = handler
+	if handler != nil {
+		s.onMessageReceivedHandler = handler
+	}
 }
 
 func (s *WsServer) Shutdown() {
