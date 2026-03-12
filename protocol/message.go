@@ -2,14 +2,12 @@ package protocol
 
 import "fmt"
 
-// Message represents a message exchanged between peers
 type Message struct {
 	Sender   string `json:"sender"`
 	Receiver string `json:"receiver"`
 	Content  []byte `json:"content"`
 }
 
-// NewMessage creates a new message with validation
 func NewMessage(content []byte, sender, receiver string) (Message, error) {
 	if sender == "" {
 		return Message{}, fmt.Errorf("sender cannot be empty")
@@ -27,7 +25,6 @@ func NewMessage(content []byte, sender, receiver string) (Message, error) {
 	}, nil
 }
 
-// Validate checks if the message is valid
 func (m Message) Validate() error {
 	if m.Sender == "" {
 		return fmt.Errorf("sender cannot be empty")

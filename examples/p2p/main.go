@@ -24,7 +24,6 @@ func main() {
 			func(msg []byte) {
 				fmt.Printf("[broadcast] msg: %s\n", msg)
 				peer.Broadcast(msg)
-
 			})
 	}
 	defer peer.Shutdown()

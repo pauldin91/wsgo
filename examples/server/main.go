@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/pauldin91/wsgo/protocol"
 	"github.com/pauldin91/wsgo/server"
 )
 
@@ -25,7 +27,11 @@ func main() {
 	server := server.NewTcpServer(*host)
 
 	server.OnMessageReceived(func(msg []byte) {
-		fmt.Printf("Received: %s\n", string(msg))
+		message := protocol.Message{}
+		err := json.Unmarshal(msg, &message)
+		if err != nil {
+			fmt.Printf("Received: %s\n", string(msg))
+		}
 	})
 
 	reader := bufio.NewReader(os.Stdin)
