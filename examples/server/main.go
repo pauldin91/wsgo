@@ -31,7 +31,10 @@ func main() {
 		err := json.Unmarshal(msg, &message)
 		if err != nil {
 			fmt.Printf("Received: %s\n", string(msg))
+			return
 		}
+		conns := server.GetConnections()
+		conns[message.Receiver].Write(msg)
 	})
 
 	reader := bufio.NewReader(os.Stdin)

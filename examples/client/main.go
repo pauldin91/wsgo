@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -30,6 +31,7 @@ func main() {
 		log.Fatalf("Failed to connect: %v", err)
 	}
 
+	fmt.Printf("connection: %s\n", client.GetConnId())
 	reader := bufio.NewReader(os.Stdin)
 	go func() {
 		for {
