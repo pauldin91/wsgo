@@ -27,14 +27,30 @@ func main() {
 	server := server.NewTcpServer(*host)
 
 	server.OnMessageReceived(func(msg []byte) {
+
+		// msg = bytes.TrimSpace(msg)
+		// if len(msg) > 0 && msg[0] == '"' {
+		// 	var inner string
+		// 	if err := json.Unmarshal(msg, &inner); err == nil {
+		// 		msg = []byte(inner)
+		// 	}
+		// }
 		message := protocol.Message{}
 		err := json.Unmarshal(msg, &message)
 		if err != nil {
-			fmt.Printf("Received: %s\n", string(msg))
+			fmt.Printf("Failed to parse message %s with error: %v\n", string(msg), err)
 			return
 		}
+
 		conns := server.GetConnections()
-		conns[message.Receiver].Write(msg)
+
+		conn, ok := conns[message.Receiver]
+		if !ok {
+			fmt.Printf("Receiver %s not connected\n", message.Receiver)
+			return
+		}
+
+		conn.Write([]byte(string(msg) + "\n"))
 	})
 
 	reader := bufio.NewReader(os.Stdin)

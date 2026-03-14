@@ -5,10 +5,10 @@ import "fmt"
 type Message struct {
 	Sender   string `json:"sender"`
 	Receiver string `json:"receiver"`
-	Content  []byte `json:"content"`
+	Content  string `json:"content"`
 }
 
-func NewMessage(content []byte, sender, receiver string) (Message, error) {
+func NewMessage(content, sender, receiver string) (Message, error) {
 	if sender == "" {
 		return Message{}, fmt.Errorf("sender cannot be empty")
 	}
