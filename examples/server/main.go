@@ -28,29 +28,13 @@ func main() {
 
 	server.OnMessageReceived(func(msg []byte) {
 
-		// msg = bytes.TrimSpace(msg)
-		// if len(msg) > 0 && msg[0] == '"' {
-		// 	var inner string
-		// 	if err := json.Unmarshal(msg, &inner); err == nil {
-		// 		msg = []byte(inner)
-		// 	}
-		// }
 		message := protocol.Message{}
 		err := json.Unmarshal(msg, &message)
 		if err != nil {
 			fmt.Printf("Failed to parse message %s with error: %v\n", string(msg), err)
 			return
 		}
-
-		conns := server.GetConnections()
-
-		conn, ok := conns[message.Receiver]
-		if !ok {
-			fmt.Printf("Receiver %s not connected\n", message.Receiver)
-			return
-		}
-
-		conn.Write([]byte(string(msg) + "\n"))
+		server.SendTo(message)
 	})
 
 	reader := bufio.NewReader(os.Stdin)

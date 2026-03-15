@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net"
 	"sync"
+
+	"github.com/pauldin91/wsgo/protocol"
 )
 
 type TcpServer struct {
@@ -74,6 +77,22 @@ func (s *TcpServer) Shutdown() {
 	s.connectionsMutex.Unlock()
 	s.wg.Wait()
 	close(s.errorChan)
+}
+
+func (s *TcpServer) SendTo(msg protocol.Message) {
+	s.connectionsMutex.RLock()
+	defer s.connectionsMutex.RUnlock()
+	if conn, ok := s.connections[msg.Receiver]; ok {
+		message := protocol.Message{Sender: msg.Sender, Content: msg.Content}
+		deliverable, err := json.Marshal(message)
+		if err != nil {
+			log.Printf("error: %v,could not deliver msg %s", message)
+		}
+		conn.Write(deliverable)
+	} else {
+		log.Printf("error: %v, receiver %s not found", msg.Receiver)
+	}
+
 }
 
 func (s *TcpServer) GetConnections() map[string]net.Conn {
