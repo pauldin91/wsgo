@@ -3,18 +3,20 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log"
 	"net"
 	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/pauldin91/wsgo/protocol"
 )
 
-type WsServer struct {
+type WSServer struct {
 	address                  string
 	connectionsMutex         sync.RWMutex
-	websocketConns           map[string]*websocket.Conn
+	connections              map[string]*websocket.Conn
 	wg                       *sync.WaitGroup
 	errorChan                chan error
 	onMessageReceivedHandler func([]byte)
@@ -24,10 +26,10 @@ type WsServer struct {
 	mux                      *http.ServeMux
 }
 
-func NewWsServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WsServer {
-	server := &WsServer{
+func NewWSServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WSServer {
+	server := &WSServer{
 		address:                  serveAddress,
-		websocketConns:           make(map[string]*websocket.Conn),
+		connections:              make(map[string]*websocket.Conn),
 		errorChan:                make(chan error, 1),
 		wg:                       &sync.WaitGroup{},
 		mux:                      http.NewServeMux(),
@@ -42,7 +44,7 @@ func NewWsServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WsServer 
 	return server
 }
 
-func (s *WsServer) Start(ctx context.Context) {
+func (s *WSServer) Start(ctx context.Context) {
 	s.wg.Add(2)
 	go func() {
 		defer s.wg.Done()
@@ -69,32 +71,20 @@ func (s *WsServer) Start(ctx context.Context) {
 			}
 		}
 	}()
-	go func() {
-		defer s.wg.Done()
-		s.waitForShutdown(ctx)
-	}()
 }
 
-func (s *WsServer) waitForShutdown(ctx context.Context) {
-	select {
-	case rcv := <-ctx.Done():
-		log.Printf("shutdown signal received %v\n", rcv)
-	case <-s.errorChan:
-	}
-}
-
-func (s *WsServer) OnMessageReceived(handler func([]byte)) {
+func (s *WSServer) OnMessageReceived(handler func([]byte)) {
 	if handler != nil {
 		s.onMessageReceivedHandler = handler
 	}
 }
 
-func (s *WsServer) Shutdown() {
+func (s *WSServer) Shutdown() {
 	if s.httpServer != nil {
 		s.httpServer.Shutdown(context.Background())
 	}
 	s.connectionsMutex.Lock()
-	for _, c := range s.websocketConns {
+	for _, c := range s.connections {
 		c.Close()
 	}
 	s.connectionsMutex.Unlock()
@@ -102,7 +92,7 @@ func (s *WsServer) Shutdown() {
 	close(s.errorChan)
 }
 
-func (s *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
+func (s *WSServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
@@ -119,7 +109,7 @@ func (s *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	clientID := conn.RemoteAddr().String()
 
 	s.connectionsMutex.Lock()
-	s.websocketConns[clientID] = conn
+	s.connections[clientID] = conn
 	s.connectionsMutex.Unlock()
 	s.wg.Add(1)
 	go func() {
@@ -128,7 +118,7 @@ func (s *WsServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func (s *WsServer) handleConnection(conn *websocket.Conn) {
+func (s *WSServer) handleConnection(conn *websocket.Conn) {
 	defer s.closeConnection(conn.RemoteAddr().String())
 
 	for {
@@ -140,25 +130,37 @@ func (s *WsServer) handleConnection(conn *websocket.Conn) {
 	}
 }
 
-func (s *WsServer) closeConnection(clientID string) {
+func (s *WSServer) closeConnection(clientID string) {
 	s.connectionsMutex.Lock()
-	if conn, exists := s.websocketConns[clientID]; exists {
+	if conn, exists := s.connections[clientID]; exists {
 		err := conn.Close()
 		if err != nil {
 			log.Printf("error closing connection %v", err)
 		}
-		delete(s.websocketConns, clientID)
+		delete(s.connections, clientID)
 	}
 	s.connectionsMutex.Unlock()
 }
 
-func (s *WsServer) Broadcast(msg []byte) error {
+func (s *WSServer) Broadcast(msg []byte) error {
 	s.connectionsMutex.Lock()
 	defer s.connectionsMutex.Unlock()
-	for _, c := range s.websocketConns {
+	for _, c := range s.connections {
 		if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *WSServer) SendTo(msg protocol.Message) error {
+	s.connectionsMutex.RLock()
+	defer s.connectionsMutex.RUnlock()
+	if conn, ok := s.connections[msg.Receiver]; ok {
+		message := protocol.Message{Sender: msg.Sender, Content: msg.Content}
+		return conn.WriteJSON(message)
+
+	}
+	return errors.New("address not found")
+
 }

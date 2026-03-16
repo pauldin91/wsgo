@@ -6,9 +6,9 @@ import (
 )
 
 type Server = server.Server
-type TcpServer = server.TcpServer
-type WsServer = server.WsServer
-type QuicServer = server.QuicServer
+type TcpServer = server.TCPServer
+type WsServer = server.WSServer
+type QuicServer = server.QUICServer
 type Client = client.Client
 type TcpClient = client.TcpClient
 type WsClient = client.WsClient

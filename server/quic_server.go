@@ -2,14 +2,17 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/pauldin91/wsgo/internal/crypto"
+	"github.com/pauldin91/wsgo/protocol"
 	"github.com/quic-go/quic-go"
 )
 
-type QuicServer struct {
+type QUICServer struct {
 	address                  string
 	listener                 *quic.Listener
 	connectionsMutex         sync.RWMutex
@@ -18,15 +21,15 @@ type QuicServer struct {
 	onMessageReceivedHandler func([]byte)
 }
 
-func NewQuicServer(address string) *QuicServer {
-	return &QuicServer{
+func NewQuicServer(address string) *QUICServer {
+	return &QUICServer{
 		address:     address,
 		connections: map[string]*quic.Conn{},
 		wg:          &sync.WaitGroup{},
 	}
 }
 
-func (s *QuicServer) Start(ctx context.Context) {
+func (s *QUICServer) Start(ctx context.Context) {
 	var err error
 	s.listener, err = quic.ListenAddr(s.address, crypto.GenerateTLSConfig(), nil)
 	if err != nil {
@@ -39,7 +42,7 @@ func (s *QuicServer) Start(ctx context.Context) {
 	}()
 }
 
-func (s *QuicServer) acceptConnections(ctx context.Context) {
+func (s *QUICServer) acceptConnections(ctx context.Context) {
 	for {
 		conn, err := s.listener.Accept(ctx)
 		if err != nil {
@@ -56,7 +59,7 @@ func (s *QuicServer) acceptConnections(ctx context.Context) {
 	}
 }
 
-func (s *QuicServer) handleConnection(ctx context.Context, conn *quic.Conn) {
+func (s *QUICServer) handleConnection(ctx context.Context, conn *quic.Conn) {
 	stream, err := conn.AcceptStream(ctx)
 	if err != nil {
 		return
@@ -71,13 +74,13 @@ func (s *QuicServer) handleConnection(ctx context.Context, conn *quic.Conn) {
 	s.onMessageReceivedHandler(buffer[:n])
 }
 
-func (s *QuicServer) OnMessageReceived(handler func([]byte)) {
+func (s *QUICServer) OnMessageReceived(handler func([]byte)) {
 	if handler != nil {
 		s.onMessageReceivedHandler = handler
 	}
 }
 
-func (s *QuicServer) Shutdown() {
+func (s *QUICServer) Shutdown() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
@@ -89,7 +92,7 @@ func (s *QuicServer) Shutdown() {
 	s.wg.Wait()
 }
 
-func (s *QuicServer) Broadcast(msg []byte) error {
+func (s *QUICServer) Broadcast(msg []byte) error {
 	s.connectionsMutex.Lock()
 	defer s.connectionsMutex.Unlock()
 	for _, c := range s.connections {
@@ -101,4 +104,24 @@ func (s *QuicServer) Broadcast(msg []byte) error {
 		s.Close()
 	}
 	return nil
+}
+
+func (s *QUICServer) SendTo(msg protocol.Message) error {
+	s.connectionsMutex.RLock()
+	defer s.connectionsMutex.RUnlock()
+	if conn, ok := s.connections[msg.Receiver]; ok {
+		message := protocol.Message{Sender: msg.Sender, Content: msg.Content}
+		deliverable, err := json.Marshal(message)
+		if err != nil {
+			return err
+		}
+		s, err := conn.OpenStreamSync(context.Background())
+		if err != nil {
+			return err
+		}
+		s.Write(deliverable)
+		s.Close()
+	}
+	return errors.New("address not found")
+
 }

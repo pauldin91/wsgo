@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,10 +21,14 @@ func main() {
 	defer stop()
 
 	host := flag.String("host", ":8080", "Server host")
+	proto := flag.String("protocol", "tcp", "Protocol")
+
 	flag.Parse()
 
-	server := server.NewTcpServer(*host)
-
+	server, err := server.NewServer(*host, *proto)
+	if err != nil {
+		log.Fatalf("invalid protocol %v", err)
+	}
 	server.OnMessageReceived(func(msg []byte) {
 
 		message := protocol.Message{}
@@ -58,6 +61,5 @@ func main() {
 
 	server.Start(ctx)
 	<-ctx.Done()
-	slog.Info("[main] shutdown signal received")
 	server.Shutdown()
 }

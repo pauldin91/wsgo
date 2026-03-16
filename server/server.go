@@ -3,10 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
+
+	"github.com/pauldin91/wsgo/protocol"
 )
 
 type Server interface {
 	Start(context.Context)
+	SendTo(protocol.Message) error
 	OnMessageReceived(handler func([]byte))
 	Broadcast([]byte) error
 	Shutdown()
@@ -15,9 +18,9 @@ type Server interface {
 func NewServer(addr string, protocol string) (Server, error) {
 	switch protocol {
 	case "tcp":
-		return NewTcpServer(addr), nil
+		return NewTCPServer(addr), nil
 	case "websocket", "ws":
-		return NewWsServerWithCerts(addr, nil), nil
+		return NewWSServerWithCerts(addr, nil), nil
 	case "quic":
 		return NewQuicServer(addr), nil
 	case "webrtc":

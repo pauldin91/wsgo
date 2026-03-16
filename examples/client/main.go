@@ -19,10 +19,13 @@ func main() {
 	defer stop()
 
 	host := flag.String("host", ":8081", "Server host")
+	protocol := flag.String("protocol", "tcp", "Protocol")
 	flag.Parse()
 
-	client := client.NewTcpClient(*host)
-
+	client, err := client.NewClient(*host, *protocol)
+	if err != nil {
+		log.Fatalf("invalid protocol %v", err)
+	}
 	client.OnMessageReceived(func(msg []byte) {
 		log.Printf("Received: %s", msg)
 	})
