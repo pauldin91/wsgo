@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"sync"
 
 	"github.com/pauldin91/wsgo/internal/crypto"
@@ -76,10 +75,6 @@ func (s *QuicServer) OnMessageReceived(handler func([]byte)) {
 	if handler != nil {
 		s.onMessageReceivedHandler = handler
 	}
-}
-
-func (s *QuicServer) GetConnections() map[string]net.Conn {
-	return make(map[string]net.Conn)
 }
 
 func (s *QuicServer) Shutdown() {

@@ -42,16 +42,6 @@ func NewWsServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WsServer 
 	return server
 }
 
-func (s *WsServer) GetConnections() map[string]net.Conn {
-	s.connectionsMutex.RLock()
-	defer s.connectionsMutex.RUnlock()
-	conns := make(map[string]net.Conn, len(s.websocketConns))
-	for k, v := range s.websocketConns {
-		conns[k] = v.UnderlyingConn()
-	}
-	return conns
-}
-
 func (s *WsServer) Start(ctx context.Context) {
 	s.wg.Add(2)
 	go func() {

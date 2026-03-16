@@ -25,10 +25,5 @@ func (c *WebRTCClient) GetConnId() string {
 	return c.connID
 }
 func (c *WebRTCClient) OnMessageReceived(func([]byte)) {}
-func (c *WebRTCClient) OnMessageParse(func(net.Conn)) {
-
-}
-func SendError(err error) {}
-func Send([]byte) error {
-	return nil
-}
+func SendError(err error)                              {}
+func Send([]byte) error                                { return nil }

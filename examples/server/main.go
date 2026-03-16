@@ -52,13 +52,7 @@ func main() {
 			if err := server.Broadcast(input); err != nil {
 				log.Printf("Broadcast error: %v", err)
 			}
-			conns := server.GetConnections()
-			cid := make([]string, 0, len(conns))
-			for _, c := range conns {
-				cid = append(cid, c.RemoteAddr().String())
-			}
-
-			log.Printf("Broadcasted msg %s to clients %v\n", input, cid)
+			log.Printf("Broadcasted msg %s to all clients\n", input)
 		}
 	}()
 

@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"net"
 )
 
 type Client interface {
@@ -12,7 +11,6 @@ type Client interface {
 	Disconnect() error
 	GetConnId() string
 	OnMessageReceived(func([]byte))
-	OnMessageParse(func(net.Conn))
 	SendError(err error)
 	Send([]byte) error
 }

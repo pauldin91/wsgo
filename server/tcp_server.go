@@ -86,23 +86,13 @@ func (s *TcpServer) SendTo(msg protocol.Message) {
 		message := protocol.Message{Sender: msg.Sender, Content: msg.Content}
 		deliverable, err := json.Marshal(message)
 		if err != nil {
-			log.Printf("error: %v,could not deliver msg %s", message)
+			log.Printf("error: %v,could not deliver msg %s", err, message)
 		}
 		conn.Write(deliverable)
 	} else {
-		log.Printf("error: %v, receiver %s not found", msg.Receiver)
+		log.Printf("receiver %s not found", msg.Receiver)
 	}
 
-}
-
-func (s *TcpServer) GetConnections() map[string]net.Conn {
-	s.connectionsMutex.RLock()
-	defer s.connectionsMutex.RUnlock()
-	conns := make(map[string]net.Conn, len(s.connections))
-	for k, v := range s.connections {
-		conns[k] = v
-	}
-	return conns
 }
 
 func (s *TcpServer) closeConnection(clientID string) {

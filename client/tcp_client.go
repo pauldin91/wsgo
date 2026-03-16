@@ -20,7 +20,6 @@ type TcpClient struct {
 	wg                       *sync.WaitGroup
 	tlsConfig                *tls.Config
 	onMessageReceivedHandler func([]byte)
-	onConnectionEstablished  func(net.Conn)
 }
 
 func NewTcpClient(address string) *TcpClient {
@@ -29,16 +28,11 @@ func NewTcpClient(address string) *TcpClient {
 		address:                  address,
 		errorChan:                make(chan error, 1),
 		onMessageReceivedHandler: func(b []byte) {},
-		onConnectionEstablished:  func(c net.Conn) {},
 	}
 }
 
 func (c *TcpClient) OnMessageReceived(handler func([]byte)) {
 	c.onMessageReceivedHandler = handler
-}
-
-func (c *TcpClient) OnMessageParse(handler func(net.Conn)) {
-	c.onConnectionEstablished = handler
 }
 
 func (c *TcpClient) Send(msg []byte) error {
@@ -82,8 +76,6 @@ func (c *TcpClient) Connect(ctx context.Context) error {
 		defer c.wg.Done()
 		c.handleShutdown(ctx)
 	}()
-
-	c.onConnectionEstablished(conn)
 
 	return nil
 }

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 )
 
 type WebRTCServer struct {
@@ -27,7 +26,5 @@ func (s *WebRTCServer) OnMessageReceived(handler func([]byte)) {
 		s.onMessageReceivedHandler = handler
 	}
 }
-func (s *WebRTCServer) GetConnections() map[string]net.Conn {
-	return nil
-}
+
 func (s *WebRTCServer) Shutdown() {}

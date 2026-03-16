@@ -1,28 +1,22 @@
 package client
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
-	"net"
-	"os"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 type WsClient struct {
-	address                        string
-	errorChan                      chan error
-	conn                           *websocket.Conn
-	connMutex                      sync.RWMutex
-	wg                             *sync.WaitGroup
-	onMessageReceivedHandler       func([]byte)
-	onConnectionEstablishedHandler func(net.Conn)
-	onInputReadyHandler            func()
+	address                  string
+	errorChan                chan error
+	conn                     *websocket.Conn
+	connMutex                sync.RWMutex
+	wg                       *sync.WaitGroup
+	onMessageReceivedHandler func([]byte)
 }
 
 func NewWsClient(address string) *WsClient {
@@ -30,12 +24,10 @@ func NewWsClient(address string) *WsClient {
 		address = "ws://localhost:8080"
 	}
 	return &WsClient{
-		wg:                             &sync.WaitGroup{},
-		address:                        address,
-		errorChan:                      make(chan error, 1),
-		onMessageReceivedHandler:       func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
-		onConnectionEstablishedHandler: func(c net.Conn) {},
-		onInputReadyHandler:            func() {},
+		wg:                       &sync.WaitGroup{},
+		address:                  address,
+		errorChan:                make(chan error, 1),
+		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
 	}
 }
 
@@ -52,35 +44,6 @@ func (c *WsClient) Send(msg []byte) error {
 
 func (c *WsClient) OnMessageReceived(handler func([]byte)) {
 	c.onMessageReceivedHandler = handler
-}
-
-func (c *WsClient) OnMessageParse(handler func(net.Conn)) {
-	c.onConnectionEstablishedHandler = handler
-}
-func (c *WsClient) OnParseMsgHandler(src *os.File) {
-	c.onInputReadyHandler = func() {
-		reader := bufio.NewReader(src)
-		for {
-			input, _, err := reader.ReadLine()
-			if err != nil {
-				c.SendError(err)
-				return
-			}
-			text := strings.TrimSpace(string(input))
-			if text == "exit" {
-				return
-			}
-			if err := c.Send([]byte(text + "\n")); err != nil {
-				c.SendError(err)
-				return
-			}
-		}
-	}
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
-		c.onInputReadyHandler()
-	}()
 }
 
 func (c *WsClient) Disconnect() error {
