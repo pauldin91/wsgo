@@ -64,3 +64,8 @@ func (p *P2PServer) Broadcast(msg []byte) {
 func (p *P2PServer) Send(msg []byte) {
 	p.this.Send(msg)
 }
+
+func (s *P2PServer) GetConnections() map[string]string {
+	return s.server.GetConnections()
+
+}
