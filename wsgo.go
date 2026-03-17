@@ -14,4 +14,4 @@ type Client = client.Client
 type TcpClient = client.TcpClient
 type WsClient = client.WsClient
 type QuicClient = client.QuicClient
-type Peer = p2p.Peer
+type Peer = p2p.P2PServer

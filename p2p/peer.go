@@ -8,12 +8,12 @@ import (
 	"github.com/pauldin91/wsgo/server"
 )
 
-type Peer struct {
+type P2PServer struct {
 	this   client.Client
 	server server.Server
 }
 
-func NewPeer(hostAddr, peerAddr, protocol string) (*Peer, error) {
+func NewP2PServer(hostAddr, peerAddr, protocol string) (*P2PServer, error) {
 
 	server, err := server.NewServer(hostAddr, protocol)
 	if err != nil {
@@ -24,22 +24,22 @@ func NewPeer(hostAddr, peerAddr, protocol string) (*Peer, error) {
 		return nil, err
 	}
 
-	return &Peer{
+	return &P2PServer{
 		server: server,
 		this:   client,
 	}, nil
 }
 
-func (p *Peer) Start(ctx context.Context) {
+func (p *P2PServer) Start(ctx context.Context) {
 	p.server.Start(ctx)
 }
 
-func (p *Peer) Shutdown() {
+func (p *P2PServer) Shutdown() {
 	p.server.Shutdown()
 	p.this.Disconnect()
 }
 
-func (p *Peer) Connect(ctx context.Context) error {
+func (p *P2PServer) Connect(ctx context.Context) error {
 	var err error
 	if err = p.this.Connect(ctx); err != nil {
 		log.Fatalf("unable to create client: %v", err.Error())
@@ -48,7 +48,7 @@ func (p *Peer) Connect(ctx context.Context) error {
 	return nil
 }
 
-func (p *Peer) OnMessageReceived(serverHandler, clientHandler func([]byte)) {
+func (p *P2PServer) OnMessageReceived(serverHandler, clientHandler func([]byte)) {
 	if serverHandler != nil {
 		p.server.OnMessageReceived(serverHandler)
 	}
@@ -57,10 +57,10 @@ func (p *Peer) OnMessageReceived(serverHandler, clientHandler func([]byte)) {
 	}
 }
 
-func (p *Peer) Broadcast(msg []byte) {
+func (p *P2PServer) Broadcast(msg []byte) {
 	p.server.Broadcast(msg)
 }
 
-func (p *Peer) Send(msg []byte) {
+func (p *P2PServer) Send(msg []byte) {
 	p.this.Send(msg)
 }
