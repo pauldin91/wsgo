@@ -42,6 +42,17 @@ func (s *QUICServer) Start(ctx context.Context) {
 	}()
 }
 
+func (s *QUICServer) GetConnections() map[string]string {
+	result := make(map[string]string)
+	s.connectionsMutex.Lock()
+	defer s.connectionsMutex.Unlock()
+	for _, c := range s.connections {
+		result[c.RemoteAddr().String()] = c.RemoteAddr().String()
+	}
+	return result
+
+}
+
 func (s *QUICServer) acceptConnections(ctx context.Context) {
 	for {
 		conn, err := s.listener.Accept(ctx)

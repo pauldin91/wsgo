@@ -10,6 +10,7 @@ import (
 type Server interface {
 	Start(context.Context)
 	SendTo(protocol.Message) error
+	GetConnections() map[string]string
 	OnMessageReceived(handler func([]byte))
 	Broadcast([]byte) error
 	Shutdown()

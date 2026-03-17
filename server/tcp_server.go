@@ -123,6 +123,17 @@ func (s *TCPServer) acceptConnections() {
 	}
 }
 
+func (s *TCPServer) GetConnections() map[string]string {
+	result := make(map[string]string)
+	s.connectionsMutex.Lock()
+	defer s.connectionsMutex.Unlock()
+	for _, c := range s.connections {
+		result[c.RemoteAddr().String()] = c.RemoteAddr().String()
+	}
+	return result
+
+}
+
 func (s *TCPServer) handleConnection(clientID string) {
 	defer s.wg.Done()
 	defer s.closeConnection(clientID)

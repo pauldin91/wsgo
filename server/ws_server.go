@@ -164,3 +164,14 @@ func (s *WSServer) SendTo(msg protocol.Message) error {
 	return errors.New("address not found")
 
 }
+
+func (s *WSServer) GetConnections() map[string]string {
+	result := make(map[string]string)
+	s.connectionsMutex.Lock()
+	defer s.connectionsMutex.Unlock()
+	for _, c := range s.connections {
+		result[c.RemoteAddr().String()] = c.RemoteAddr().String()
+	}
+	return result
+
+}
