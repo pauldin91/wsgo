@@ -2,6 +2,7 @@ package wsgo
 
 import (
 	"github.com/pauldin91/wsgo/client"
+	"github.com/pauldin91/wsgo/p2p"
 	"github.com/pauldin91/wsgo/server"
 )
 
@@ -13,3 +14,4 @@ type Client = client.Client
 type TcpClient = client.TcpClient
 type WsClient = client.WsClient
 type QuicClient = client.QuicClient
+type Peer = p2p.Peer
