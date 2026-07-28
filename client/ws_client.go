@@ -15,14 +15,14 @@ import (
 )
 
 type WsClient struct {
-	address                        string
-	errorChan                      chan error
-	conn                           *websocket.Conn
-	connMutex                      sync.RWMutex
-	wg                             *sync.WaitGroup
-	onMessageReceivedHandler       func([]byte)
-	onConnectionEstablishedHandler func(net.Conn)
-	onInputReadyHandler            func()
+	address            string
+	errorChan          chan error
+	conn               *websocket.Conn
+	connMutex          sync.RWMutex
+	wg                 *sync.WaitGroup
+	msgReceivedHandler func([]byte)
+	connectedHandler   func(net.Conn)
+	parsingMsgHandler  func()
 }
 
 func NewWsClient(address string) *WsClient {
@@ -30,12 +30,12 @@ func NewWsClient(address string) *WsClient {
 		address = "ws://localhost:8080"
 	}
 	return &WsClient{
-		wg:                             &sync.WaitGroup{},
-		address:                        address,
-		errorChan:                      make(chan error, 1),
-		onMessageReceivedHandler:       func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
-		onConnectionEstablishedHandler: func(c net.Conn) {},
-		onInputReadyHandler:            func() {},
+		wg:                 &sync.WaitGroup{},
+		address:            address,
+		errorChan:          make(chan error, 1),
+		msgReceivedHandler: func(bytes []byte) { log.Printf("Received: %v\n", bytes) },
+		connectedHandler:   func(c net.Conn) { log.Printf("Connected to server: %s", address) },
+		parsingMsgHandler:  func() {},
 	}
 }
 
@@ -51,14 +51,14 @@ func (c *WsClient) Send(msg []byte) error {
 }
 
 func (c *WsClient) OnMessageReceivedHandler(handler func([]byte)) {
-	c.onMessageReceivedHandler = handler
+	c.msgReceivedHandler = handler
 }
 
 func (c *WsClient) OnMessageParseHandler(handler func(net.Conn)) {
-	c.onConnectionEstablishedHandler = handler
+	c.connectedHandler = handler
 }
 func (c *WsClient) OnParseMsgHandler(src *os.File) {
-	c.onInputReadyHandler = func() {
+	c.parsingMsgHandler = func() {
 		reader := bufio.NewReader(src)
 		for {
 			input, _, err := reader.ReadLine()
@@ -79,7 +79,7 @@ func (c *WsClient) OnParseMsgHandler(src *os.File) {
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
-		c.onInputReadyHandler()
+		c.parsingMsgHandler()
 	}()
 }
 
@@ -140,7 +140,7 @@ func (c *WsClient) readMessages() {
 			}
 			return
 		}
-		c.onMessageReceivedHandler(message)
+		c.msgReceivedHandler(message)
 	}
 }
 

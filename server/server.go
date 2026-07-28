@@ -24,7 +24,7 @@ func NewServer(addr string, protocol string) (Server, error) {
 	case "quic":
 		return NewQuicServer(addr), nil
 	case "webrtc":
-		return nil, fmt.Errorf("WebRTC protocol not yet implemented")
+		return NewWebRTCServer(addr), nil
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", protocol)
 	}

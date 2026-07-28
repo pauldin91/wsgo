@@ -1,40 +1,94 @@
 version: "3.8"
 
 services:
+
   tcp.server:
-    init: true
     build:
       context: ..
-      dockerfile: docker/raw.server.dockerfile
+      dockerfile: docker/server.dockerfile
     ports:
       - "4443:4443"
-    environment:
-      - host=:4443
+    command: ["./main", "-host=:4443", "-protocol=tcp"]
     networks:
       - wsgo
 
   ws.server:
     build:
       context: ..
-      dockerfile: docker/ws.server.dockerfile
+      dockerfile: docker/server.dockerfile
     ports:
       - "6443:6443"
-    environment:
-      - host=:6443
+    command: ["./main", "-host=:6443", "-protocol=websocket"]
     networks:
       - wsgo
 
-  p2p.server:
+  quic.server:
     build:
       context: ..
-      dockerfile: docker/p2p.server.dockerfile
+      dockerfile: docker/server.dockerfile
     ports:
-      - "8443:8443"
-    environment:
-      - host=:8443
-      - peers=:4443
+      - "7443:7443/udp"
+    command: ["./main", "-host=:7443", "-protocol=quic"]
     networks:
       - wsgo
+
+  webrtc.server:
+    build:
+      context: ..
+      dockerfile: docker/server.dockerfile
+    ports:
+      - "8443:8443"
+    command: ["./main", "-host=:8443", "-protocol=webrtc"]
+    networks:
+      - wsgo
+
+  tcp.client:
+    build:
+      context: ..
+      dockerfile: docker/client.dockerfile
+    command: ["./main", "-host=tcp.server:4443", "-protocol=tcp"]
+    depends_on:
+      - tcp.server
+    networks:
+      - wsgo
+    stdin_open: true
+    tty: true
+
+  ws.client:
+    build:
+      context: ..
+      dockerfile: docker/client.dockerfile
+    command: ["./main", "-host=ws://ws.server:6443/ws", "-protocol=websocket"]
+    depends_on:
+      - ws.server
+    networks:
+      - wsgo
+    stdin_open: true
+    tty: true
+
+  quic.client:
+    build:
+      context: ..
+      dockerfile: docker/client.dockerfile
+    command: ["./main", "-host=quic.server:7443", "-protocol=quic"]
+    depends_on:
+      - quic.server
+    networks:
+      - wsgo
+    stdin_open: true
+    tty: true
+
+  webrtc.client:
+    build:
+      context: ..
+      dockerfile: docker/client.dockerfile
+    command: ["./main", "-host=http://webrtc.server:8443/webrtc/offer", "-protocol=webrtc"]
+    depends_on:
+      - webrtc.server
+    networks:
+      - wsgo
+    stdin_open: true
+    tty: true
 
 networks:
   wsgo:

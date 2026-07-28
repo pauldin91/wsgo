@@ -13,20 +13,27 @@ import (
 )
 
 func main() {
-	// Signal handling setup
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	host := flag.String("host", ":4443", "Server host")
+	host := flag.String("host", ":4443", "Server listen address")
+	proto := flag.String("protocol", "tcp", "Protocol to use: tcp, websocket, quic, webrtc")
 	flag.Parse()
 
-	server := server.NewTcpServer(*host)
-	server.Start(ctx)
+	srv, err := server.NewServer(*host, *proto)
+	if err != nil {
+		slog.Error("failed to create server", "error", err)
+		os.Exit(1)
+	}
 
-	server.OnMessageReceived(func(msg []byte) {
+	srv.OnMessageReceived(func(msg []byte) {
 		fmt.Printf("Received: %s\n", string(msg))
 	})
+
+	srv.Start(ctx)
+	slog.Info("server started", "protocol", *proto, "address", *host)
+
 	<-ctx.Done()
-	slog.Info("[main] shutdown signal received")
-	server.Shutdown()
+	slog.Info("shutdown signal received")
+	srv.Shutdown()
 }

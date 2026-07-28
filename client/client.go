@@ -23,9 +23,9 @@ func NewClient(ctx context.Context, addr string, protocol string) (Client, error
 	case "websocket", "ws":
 		return NewWsClient(addr), nil
 	case "quic":
-		return nil, fmt.Errorf("QUIC protocol not yet implemented")
+		return NewQuicClient(addr), nil
 	case "webrtc":
-		return nil, fmt.Errorf("WebRTC protocol not yet implemented")
+		return NewWebRTCClient(addr), nil
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", protocol)
 	}
