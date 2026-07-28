@@ -4,7 +4,7 @@ type Type string
 
 const (
 	TCP       Type = "tcp"
-	WebSocket Type = "websocket"
+	WebSocket Type = "ws"
 	QUIC      Type = "quic"
 	WebRTC    Type = "webrtc"
 )

@@ -20,7 +20,7 @@ func main() {
 	proto := flag.String("protocol", "tcp", "Protocol to use: tcp, websocket, quic, webrtc")
 	flag.Parse()
 
-	c, err := client.NewClient(ctx, *host, *proto)
+	c, err := client.NewClient(*host, *proto)
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}

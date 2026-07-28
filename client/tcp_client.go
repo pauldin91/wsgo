@@ -91,7 +91,7 @@ func (c *TcpClient) Connect(ctx context.Context) error {
 func (c *TcpClient) GetConnId() string {
 	c.connMutex.RLock()
 	defer c.connMutex.RUnlock()
-	return fmt.Sprintf("%p", c.conn)
+	return c.conn.LocalAddr().String()
 }
 
 func (c *TcpClient) Close() {
@@ -142,4 +142,10 @@ func (c *TcpClient) handleShutdown(ctx context.Context) {
 		c.conn.Close()
 	}
 	c.connMutex.Unlock()
+}
+
+func (c *TcpClient) Disconnect() error {
+	c.connMutex.Lock()
+	defer c.connMutex.Unlock()
+	return c.conn.Close()
 }

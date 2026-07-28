@@ -3,14 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 )
 
 type Server interface {
 	Start(context.Context)
 	//what will the server do with the message
 	OnMessageReceived(handler func([]byte))
-	GetConnections() map[string]net.Conn
+	GetConnections() map[string]string
 	Broadcast([]byte) error
 	Shutdown()
 }
@@ -18,9 +17,9 @@ type Server interface {
 func NewServer(addr string, protocol string) (Server, error) {
 	switch protocol {
 	case "tcp":
-		return NewTcpServer(addr), nil
+		return NewTCPServer(addr), nil
 	case "websocket", "ws":
-		return NewWsServerWithCerts(addr, nil), nil
+		return NewWSServerWithCerts(addr, nil), nil
 	case "quic":
 		return NewQuicServer(addr), nil
 	case "webrtc":

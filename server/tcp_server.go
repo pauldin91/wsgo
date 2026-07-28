@@ -4,14 +4,17 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net"
 	"sync"
+
+	"github.com/pauldin91/wsgo/protocol"
 )
 
-type TcpServer struct {
+type TCPServer struct {
 	address                  string
 	connectionsMutex         sync.RWMutex
 	connections              map[string]net.Conn
@@ -22,17 +25,17 @@ type TcpServer struct {
 	tlsConfig                *tls.Config
 }
 
-func NewTcpServer(serveAddress string) *TcpServer {
-	return &TcpServer{
+func NewTCPServer(serveAddress string) *TCPServer {
+	return &TCPServer{
 		address:                  serveAddress,
 		connections:              make(map[string]net.Conn),
 		errorChan:                make(chan error, 1),
 		wg:                       &sync.WaitGroup{},
-		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", string(bytes)) },
+		onMessageReceivedHandler: func(bytes []byte) {},
 	}
 }
 
-func (s *TcpServer) Start(ctx context.Context) {
+func (s *TCPServer) Start(ctx context.Context) {
 	var err error
 	if s.tlsConfig == nil {
 		s.listener, err = net.Listen("tcp", s.address)
@@ -57,12 +60,13 @@ func (s *TcpServer) Start(ctx context.Context) {
 	}()
 }
 
-// what will the server do with the message
-func (s *TcpServer) OnMessageReceived(handler func(msg []byte)) {
-	s.onMessageReceivedHandler = handler
+func (s *TCPServer) OnMessageReceived(handler func([]byte)) {
+	if handler != nil {
+		s.onMessageReceivedHandler = handler
+	}
 }
 
-func (s *TcpServer) Shutdown() {
+func (s *TCPServer) Shutdown() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
@@ -75,17 +79,23 @@ func (s *TcpServer) Shutdown() {
 	close(s.errorChan)
 }
 
-func (s *TcpServer) GetConnections() map[string]net.Conn {
+func (s *TCPServer) SendTo(msg protocol.Message) error {
 	s.connectionsMutex.RLock()
 	defer s.connectionsMutex.RUnlock()
-	conns := make(map[string]net.Conn, len(s.connections))
-	for k, v := range s.connections {
-		conns[k] = v
+	if conn, ok := s.connections[msg.Receiver]; ok {
+		message := protocol.Message{Sender: msg.Sender, Content: msg.Content}
+		deliverable, err := json.Marshal(message)
+		if err != nil {
+			return err
+		}
+		conn.Write(deliverable)
+		return nil
 	}
-	return conns
+	return errors.New("receiver not found")
+
 }
 
-func (s *TcpServer) closeConnection(clientID string) {
+func (s *TCPServer) closeConnection(clientID string) {
 	s.connectionsMutex.Lock()
 	if conn, exists := s.connections[clientID]; exists {
 		conn.Close()
@@ -94,7 +104,7 @@ func (s *TcpServer) closeConnection(clientID string) {
 	s.connectionsMutex.Unlock()
 }
 
-func (s *TcpServer) acceptConnections() {
+func (s *TCPServer) acceptConnections() {
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -113,7 +123,18 @@ func (s *TcpServer) acceptConnections() {
 	}
 }
 
-func (s *TcpServer) handleConnection(clientID string) {
+func (s *TCPServer) GetConnections() map[string]string {
+	result := make(map[string]string)
+	s.connectionsMutex.Lock()
+	defer s.connectionsMutex.Unlock()
+	for _, c := range s.connections {
+		result[c.RemoteAddr().String()] = c.RemoteAddr().String()
+	}
+	return result
+
+}
+
+func (s *TCPServer) handleConnection(clientID string) {
 	defer s.wg.Done()
 	defer s.closeConnection(clientID)
 
@@ -139,7 +160,7 @@ func (s *TcpServer) handleConnection(clientID string) {
 	}
 }
 
-func (s *TcpServer) waitForShutdown(ctx context.Context) {
+func (s *TCPServer) waitForShutdown(ctx context.Context) {
 	select {
 	case rcv := <-ctx.Done():
 		log.Printf("shutdown signal received %v\n", rcv)
@@ -148,11 +169,11 @@ func (s *TcpServer) waitForShutdown(ctx context.Context) {
 	}
 }
 
-func (s *TcpServer) Broadcast(msg []byte) error {
+func (s *TCPServer) Broadcast(msg []byte) error {
 	s.connectionsMutex.Lock()
 	defer s.connectionsMutex.Unlock()
 	for _, c := range s.connections {
-		_, err := c.Write(msg)
+		_, err := c.Write([]byte(string(msg) + "\n"))
 		if err != nil {
 			return err
 		}

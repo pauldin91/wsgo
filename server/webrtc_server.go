@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"net"
 	"net/http"
 	"sync"
 
@@ -113,8 +112,10 @@ func (s *WebRTCServer) OnMessageReceived(handler func([]byte)) {
 	s.onMessageReceivedHandler = handler
 }
 
-func (s *WebRTCServer) GetConnections() map[string]net.Conn {
-	return make(map[string]net.Conn)
+func (s *WebRTCServer) GetConnections() map[string]string {
+	conn := make(map[string]string)
+
+	return conn
 }
 
 func (s *WebRTCServer) Broadcast(msg []byte) error {
