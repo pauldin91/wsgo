@@ -12,7 +12,6 @@ type Client interface {
 	GetConnId() string
 	OnMessageReceivedHandler(func([]byte))
 	OnMessageParseHandler(func(net.Conn))
-	SendError(err error)
 	Send([]byte) error
 }
 

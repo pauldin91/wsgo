@@ -14,9 +14,7 @@ import (
 
 type TcpClient struct {
 	address                  string
-	errorChan                chan error
 	conn                     net.Conn
-	connMutex                sync.RWMutex
 	wg                       *sync.WaitGroup
 	tlsConfig                *tls.Config
 	onMessageReceivedHandler func([]byte)
@@ -27,7 +25,6 @@ func NewTcpClient(address string) *TcpClient {
 	return &TcpClient{
 		wg:                       &sync.WaitGroup{},
 		address:                  address,
-		errorChan:                make(chan error, 1),
 		onMessageReceivedHandler: func(b []byte) {},
 		onConnectionEstablished:  func(c net.Conn) {},
 	}
@@ -42,14 +39,11 @@ func (c *TcpClient) OnMessageParseHandler(handler func(net.Conn)) {
 }
 
 func (c *TcpClient) Send(msg []byte) error {
-	c.connMutex.RLock()
-	conn := c.conn
-	c.connMutex.RUnlock()
 
-	if conn == nil {
+	if c.conn == nil {
 		return fmt.Errorf("connection not established")
 	}
-	_, err := conn.Write([]byte(string(msg) + "\n"))
+	_, err := c.conn.Write([]byte(string(msg) + "\n"))
 	return err
 }
 
@@ -67,55 +61,41 @@ func (c *TcpClient) Connect(ctx context.Context) error {
 		return err
 	}
 
-	c.connMutex.Lock()
-	c.conn = conn
-	c.connMutex.Unlock()
-
 	log.Printf("connected to server %s", c.address)
 
-	c.wg.Add(2)
+	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
-		c.readMessages()
-	}()
-	go func() {
-		defer c.wg.Done()
-		c.handleShutdown(ctx)
+		c.readMessages(ctx)
 	}()
 
 	c.onConnectionEstablished(conn)
+	c.wg.Wait()
 
 	return nil
 }
 
 func (c *TcpClient) GetConnId() string {
-	c.connMutex.RLock()
-	defer c.connMutex.RUnlock()
 	return c.conn.LocalAddr().String()
 }
 
 func (c *TcpClient) Close() {
-	c.connMutex.Lock()
 	if c.conn != nil {
 		c.conn.Close()
 	}
-	c.connMutex.Unlock()
-	c.wg.Wait()
-	close(c.errorChan)
 }
 
-func (c *TcpClient) readMessages() {
-	c.connMutex.RLock()
-	conn := c.conn
-	c.connMutex.RUnlock()
+func (c *TcpClient) readMessages(ctx context.Context) {
 
-	reader := bufio.NewReader(conn)
+	reader := bufio.NewReader(c.conn)
 	for {
 		buffer, _, err := reader.ReadLine()
 		if err != nil {
 			if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
 				select {
-				case c.errorChan <- err:
+				case <-ctx.Done():
+					c.conn.Close()
+					break
 				default:
 				}
 			}
@@ -125,27 +105,6 @@ func (c *TcpClient) readMessages() {
 	}
 }
 
-func (c *TcpClient) SendError(err error) {
-	select {
-	case c.errorChan <- err:
-	default:
-	}
-}
-
-func (c *TcpClient) handleShutdown(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-	case <-c.errorChan:
-	}
-	c.connMutex.Lock()
-	if c.conn != nil {
-		c.conn.Close()
-	}
-	c.connMutex.Unlock()
-}
-
 func (c *TcpClient) Disconnect() error {
-	c.connMutex.Lock()
-	defer c.connMutex.Unlock()
 	return c.conn.Close()
 }

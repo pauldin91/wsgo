@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/pauldin91/wsgo/client"
@@ -29,18 +30,26 @@ func main() {
 		log.Printf("Received: %s", msg)
 	})
 
-	if err := c.Connect(ctx); err != nil {
-		log.Fatalf("failed to connect: %v", err)
-	}
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+
+		defer wg.Done()
+		if err := c.Connect(ctx); err != nil {
+			log.Fatalf("failed to connect: %v", err)
+		}
+	}()
 
 	log.Printf("connected via %s to %s", *proto, *host)
-
-	reader := bufio.NewReader(os.Stdin)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(os.Stdin)
 		for {
 			input, _, err := reader.ReadLine()
 			if err != nil {
-				c.SendError(err)
+				stop()
 				return
 			}
 			if string(input) == "exit" {
@@ -53,7 +62,7 @@ func main() {
 		}
 	}()
 
-	<-ctx.Done()
+	wg.Wait()
+
 	log.Println("shutdown signal received")
-	c.Close()
 }
