@@ -31,5 +31,9 @@ func main() {
 	})
 
 	slog.Info("server started", "protocol", *proto, "address", *host)
+	go func() {
+		<-ctx.Done()
+		srv.Shutdown()
+	}()
 	srv.Start(ctx)
 }

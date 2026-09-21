@@ -46,13 +46,6 @@ func (s *TCPServer) Start(ctx context.Context) {
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
-			select {
-			case rcv := <-ctx.Done():
-				log.Printf("shutdown signal received %v\n", rcv)
-				s.Shutdown()
-				break
-			default:
-			}
 			return
 		}
 		clientID := conn.RemoteAddr().String()
@@ -79,6 +72,7 @@ func (s *TCPServer) Shutdown() {
 		c.Close()
 	}
 	s.connectionsMutex.Unlock()
+	s.wg.Wait()
 
 }
 
