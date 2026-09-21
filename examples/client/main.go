@@ -32,7 +32,7 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
+	wg.Add(2)
 	go func() {
 
 		defer wg.Done()
@@ -42,7 +42,6 @@ func main() {
 	}()
 
 	log.Printf("connected via %s to %s", *proto, *host)
-	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		reader := bufio.NewReader(os.Stdin)

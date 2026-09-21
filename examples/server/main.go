@@ -30,10 +30,6 @@ func main() {
 		fmt.Printf("Received: %s\n", string(msg))
 	})
 
-	srv.Start(ctx)
 	slog.Info("server started", "protocol", *proto, "address", *host)
-
-	<-ctx.Done()
-	slog.Info("shutdown signal received")
-	srv.Shutdown()
+	srv.Start(ctx)
 }
