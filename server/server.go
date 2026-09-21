@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 )
 
@@ -14,10 +15,10 @@ type Server interface {
 	Shutdown()
 }
 
-func NewServer(addr string, protocol string) (Server, error) {
+func NewServer(addr, protocol string, tlsConfig *tls.Config) (Server, error) {
 	switch protocol {
 	case "tcp":
-		return NewTCPServer(addr), nil
+		return NewTCPServer(addr, tlsConfig), nil
 	case "websocket", "ws":
 		return NewWSServerWithCerts(addr, nil), nil
 	case "quic":

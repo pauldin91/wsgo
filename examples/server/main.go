@@ -20,7 +20,7 @@ func main() {
 	proto := flag.String("protocol", "tcp", "Protocol to use: tcp, websocket, quic, webrtc")
 	flag.Parse()
 
-	srv, err := server.NewServer(*host, *proto)
+	srv, err := server.NewServer(*host, *proto, nil)
 	if err != nil {
 		slog.Error("failed to create server", "error", err)
 		os.Exit(1)

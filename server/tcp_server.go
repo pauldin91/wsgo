@@ -15,36 +15,53 @@ import (
 )
 
 type TCPServer struct {
-	address                  string
 	connectionsMutex         sync.RWMutex
 	connections              map[string]net.Conn
 	wg                       *sync.WaitGroup
 	listener                 net.Listener
 	onMessageReceivedHandler func([]byte)
-	tlsConfig                *tls.Config
 }
 
-func NewTCPServer(serveAddress string) *TCPServer {
+func NewTCPServer(serveAddress string, tlsConfig *tls.Config) *TCPServer {
+	var err error
+	var ln net.Listener
+	if tlsConfig != nil {
+		ln, err = tls.Listen("tcp", serveAddress, tlsConfig)
+	} else {
+		ln, err = net.Listen("tcp", serveAddress)
+
+	}
+	if err != nil {
+		return nil
+	}
 	return &TCPServer{
-		address:                  serveAddress,
 		connections:              make(map[string]net.Conn),
 		wg:                       &sync.WaitGroup{},
+		listener:                 ln,
 		onMessageReceivedHandler: func(bytes []byte) {},
 	}
 }
 
 func (s *TCPServer) Start(ctx context.Context) {
-	var err error
-	if s.tlsConfig == nil {
-		s.listener, err = net.Listen("tcp", s.address)
-	} else {
-		s.listener, err = tls.Listen("tcp", s.address, s.tlsConfig)
+	for {
+		conn, err := s.listener.Accept()
+		if err != nil {
+			select {
+			case rcv := <-ctx.Done():
+				log.Printf("shutdown signal received %v\n", rcv)
+				s.Shutdown()
+				break
+			default:
+			}
+			return
+		}
+		clientID := conn.RemoteAddr().String()
+		s.connectionsMutex.Lock()
+		s.connections[clientID] = conn
+		s.connectionsMutex.Unlock()
+		s.wg.Add(1)
+		go s.handleConnection(ctx, clientID)
 	}
-	if err != nil {
-		return
-	}
-	s.acceptConnections(ctx)
-
 }
 
 func (s *TCPServer) OnMessageReceived(handler func([]byte)) {
@@ -88,28 +105,6 @@ func (s *TCPServer) closeConnection(clientID string) {
 		delete(s.connections, clientID)
 	}
 	s.connectionsMutex.Unlock()
-}
-
-func (s *TCPServer) acceptConnections(ctx context.Context) {
-	for {
-		conn, err := s.listener.Accept()
-		if err != nil {
-			select {
-			case rcv := <-ctx.Done():
-				log.Printf("shutdown signal received %v\n", rcv)
-				s.Shutdown()
-				break
-			default:
-			}
-			return
-		}
-		clientID := conn.RemoteAddr().String()
-		s.connectionsMutex.Lock()
-		s.connections[clientID] = conn
-		s.connectionsMutex.Unlock()
-		s.wg.Add(1)
-		go s.handleConnection(ctx, clientID)
-	}
 }
 
 func (s *TCPServer) GetConnections() map[string]string {

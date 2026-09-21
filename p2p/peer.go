@@ -15,7 +15,7 @@ type P2PServer struct {
 
 func NewP2PServer(hostAddr, peerAddr, protocol string) (*P2PServer, error) {
 
-	server, err := server.NewServer(hostAddr, protocol)
+	server, err := server.NewServer(hostAddr, protocol, nil)
 	if err != nil {
 		return nil, err
 	}
