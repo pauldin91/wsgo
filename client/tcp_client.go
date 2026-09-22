@@ -4,29 +4,39 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync"
 )
 
 type TcpClient struct {
-	address                  string
-	conn                     net.Conn
-	wg                       *sync.WaitGroup
-	tlsConfig                *tls.Config
+	conn net.Conn
+	wg   *sync.WaitGroup
+
 	onMessageReceivedHandler func([]byte)
 	onConnectionEstablished  func(net.Conn)
 }
 
-func NewTcpClient(address string) *TcpClient {
+func NewTcpClient(address string, msgReceivedHandler func([]byte), tlsConfig *tls.Config) *TcpClient {
+	var err error
+	var conn net.Conn
+
+	if tlsConfig == nil {
+		conn, err = net.Dial("tcp", address)
+	} else {
+		conn, err = tls.Dial("tcp", address, tlsConfig)
+	}
+
+	log.Printf("connected to server %s", address)
+	if err != nil {
+		return nil
+	}
+
 	return &TcpClient{
 		wg:                       &sync.WaitGroup{},
-		address:                  address,
-		onMessageReceivedHandler: func(b []byte) {},
-		onConnectionEstablished:  func(c net.Conn) {},
+		onMessageReceivedHandler: msgReceivedHandler,
+		conn:                     conn,
 	}
 }
 
@@ -48,31 +58,19 @@ func (c *TcpClient) Send(msg []byte) error {
 }
 
 func (c *TcpClient) Connect(ctx context.Context) error {
-	var conn net.Conn
-	var err error
-
-	if c.tlsConfig == nil {
-		conn, err = net.Dial("tcp", c.address)
-	} else {
-		conn, err = tls.Dial("tcp", c.address, c.tlsConfig)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	log.Printf("connected to server %s", c.address)
-
-	c.wg.Add(1)
 	go func() {
-		defer c.wg.Done()
-		c.readMessages(ctx)
+		<-ctx.Done()
+		c.Disconnect()
 	}()
 
-	c.onConnectionEstablished(conn)
-	c.wg.Wait()
-
-	return nil
+	reader := bufio.NewReader(c.conn)
+	for {
+		buffer, _, err := reader.ReadLine()
+		if err != nil {
+			return nil
+		}
+		c.onMessageReceivedHandler(buffer)
+	}
 }
 
 func (c *TcpClient) GetConnId() string {
@@ -82,26 +80,6 @@ func (c *TcpClient) GetConnId() string {
 func (c *TcpClient) Close() {
 	if c.conn != nil {
 		c.conn.Close()
-	}
-}
-
-func (c *TcpClient) readMessages(ctx context.Context) {
-
-	reader := bufio.NewReader(c.conn)
-	for {
-		buffer, _, err := reader.ReadLine()
-		if err != nil {
-			if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
-				select {
-				case <-ctx.Done():
-					c.conn.Close()
-					break
-				default:
-				}
-			}
-			return
-		}
-		c.onMessageReceivedHandler(buffer)
 	}
 }
 

@@ -15,10 +15,10 @@ type Client interface {
 	Send([]byte) error
 }
 
-func NewClient(addr string, protocol string) (Client, error) {
+func NewClient(addr string, handler func([]byte), protocol string) (Client, error) {
 	switch protocol {
 	case "tcp":
-		return NewTcpClient(addr), nil
+		return NewTcpClient(addr, handler, nil), nil
 	case "websocket", "ws":
 		return NewWsClient(addr), nil
 	case "quic":

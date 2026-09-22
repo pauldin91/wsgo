@@ -21,14 +21,12 @@ func main() {
 	proto := flag.String("protocol", "tcp", "Protocol to use: tcp, websocket, quic, webrtc")
 	flag.Parse()
 
-	c, err := client.NewClient(*host, *proto)
+	c, err := client.NewClient(*host, func(msg []byte) {
+		log.Printf("Received: %s", msg)
+	}, *proto)
 	if err != nil {
 		log.Fatalf("failed to create client: %v", err)
 	}
-
-	c.OnMessageReceivedHandler(func(msg []byte) {
-		log.Printf("Received: %s", msg)
-	})
 
 	var wg sync.WaitGroup
 

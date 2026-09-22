@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/pauldin91/wsgo/client"
@@ -19,7 +20,7 @@ func NewP2PServer(hostAddr, peerAddr, protocol string) (*P2PServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := client.NewClient(peerAddr, protocol)
+	client, err := client.NewClient(peerAddr, func(msg []byte) { fmt.Printf("Received: %s", msg) }, protocol)
 	if err != nil {
 		return nil, err
 	}
