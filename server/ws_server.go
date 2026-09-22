@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"log"
 	"net"
@@ -16,25 +17,30 @@ import (
 type WSServer struct {
 	address                  string
 	connectionsMutex         sync.RWMutex
-	connections              map[string]*websocket.Conn
+	connections              map[string]net.Conn
 	wg                       *sync.WaitGroup
-	errorChan                chan error
 	onMessageReceivedHandler func([]byte)
-	tlsConfig                *tls.Config
 	httpServer               *http.Server
 	listener                 net.Listener
 	mux                      *http.ServeMux
 }
 
 func NewWSServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WSServer {
+	var err error
+	ln, err := net.Listen("tcp", serveAddress)
+	if err != nil {
+		return nil
+	}
+
 	server := &WSServer{
 		address:                  serveAddress,
-		connections:              make(map[string]*websocket.Conn),
-		errorChan:                make(chan error, 1),
+		connections:              make(map[string]net.Conn),
 		wg:                       &sync.WaitGroup{},
 		mux:                      http.NewServeMux(),
+		listener:                 ln,
 		onMessageReceivedHandler: func(bytes []byte) { log.Printf("Echo: %v\n", string(bytes)) },
 	}
+
 	server.httpServer = &http.Server{
 		Addr:      serveAddress,
 		TLSConfig: tlsConfig,
@@ -45,32 +51,8 @@ func NewWSServerWithCerts(serveAddress string, tlsConfig *tls.Config) *WSServer 
 }
 
 func (s *WSServer) Start(ctx context.Context) {
-	s.wg.Add(2)
-	go func() {
-		defer s.wg.Done()
-		var err error
-		ln, err := net.Listen("tcp", s.address)
-		if err != nil {
-			select {
-			case s.errorChan <- err:
-			default:
-			}
-			return
-		}
+	s.httpServer.Serve(s.listener)
 
-		if s.tlsConfig != nil {
-			s.listener = tls.NewListener(ln, s.tlsConfig)
-		} else {
-			s.listener = ln
-		}
-		err = s.httpServer.Serve(s.listener)
-		if err != nil && err != http.ErrServerClosed {
-			select {
-			case s.errorChan <- err:
-			default:
-			}
-		}
-	}()
 }
 
 func (s *WSServer) OnMessageReceived(handler func([]byte)) {
@@ -89,7 +71,6 @@ func (s *WSServer) Shutdown() {
 	}
 	s.connectionsMutex.Unlock()
 	s.wg.Wait()
-	close(s.errorChan)
 }
 
 func (s *WSServer) wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -100,16 +81,12 @@ func (s *WSServer) wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		select {
-		case s.errorChan <- err:
-		default:
-		}
 		return
 	}
 	clientID := conn.RemoteAddr().String()
 
 	s.connectionsMutex.Lock()
-	s.connections[clientID] = conn
+	s.connections[clientID] = conn.NetConn()
 	s.connectionsMutex.Unlock()
 	s.wg.Add(1)
 	go func() {
@@ -146,7 +123,7 @@ func (s *WSServer) Broadcast(msg []byte) error {
 	s.connectionsMutex.Lock()
 	defer s.connectionsMutex.Unlock()
 	for _, c := range s.connections {
-		if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
+		if _, err := c.Write([]byte(string(msg) + "\n")); err != nil {
 			return err
 		}
 	}
@@ -158,7 +135,9 @@ func (s *WSServer) SendTo(msg protocol.Message) error {
 	defer s.connectionsMutex.RUnlock()
 	if conn, ok := s.connections[msg.Receiver]; ok {
 		message := protocol.Message{Sender: msg.Sender, Content: msg.Content}
-		return conn.WriteJSON(message)
+		json.Marshal(message)
+		_, err := conn.Write([]byte(string(msg.Content) + "\n"))
+		return err
 
 	}
 	return errors.New("address not found")
